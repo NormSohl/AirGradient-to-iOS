@@ -8,6 +8,7 @@ import SwiftUI
 /// looking like a broken chart, and gaps in the line are real gaps.
 struct HistorySection: View {
     @Environment(MonitorsModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let monitor: Monitor
     @Binding var metric: Metric
 
@@ -81,7 +82,9 @@ struct HistorySection: View {
                 }
                 .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) }
                 .chartYAxis { AxisMarks(position: .leading) }
-                .frame(height: 160)
+                // The chart is the main reason to look at this on a tablet;
+                // give it the extra height the wider pane affords.
+                .frame(height: sizeClass == .regular ? 260 : 160)
 
                 if let last = series.last {
                     HStack(spacing: 6) {

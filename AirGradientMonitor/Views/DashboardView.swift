@@ -1,74 +1,193 @@
 import SwiftUI
 
+/// Root of the app, built iPad-first.
+///
+/// A `NavigationSplitView` keeps the monitor list permanently on screen next to
+/// a full-size detail pane — which is the whole point on a tablet that sits on a
+/// shelf showing air quality all day. On iPhone the same structure collapses to
+/// a push navigation stack for free, so there is one view hierarchy rather than
+/// two size-class branches to keep in step.
 struct DashboardView: View {
     @Environment(MonitorsModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    /// What the detail pane is showing. The overview (the tile grid) is a
+    /// first-class destination rather than the root of a stack, so on iPad it
+    /// keeps its place in the sidebar instead of being something you back out to.
+    enum Selection: Hashable {
+        case overview
+        case monitor(UUID)
+    }
+
+    @State private var selection: Selection?
     @State private var showingAdd = false
     @State private var showingSettings = false
 
-    private let columns = [GridItem(.adaptive(minimum: 165), spacing: 14)]
-
     var body: some View {
-        NavigationStack {
-            Group {
+        NavigationSplitView {
+            sidebar
+        } detail: {
+            NavigationStack { detail }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .sheet(isPresented: $showingAdd) { AddMonitorView() }
+        .sheet(isPresented: $showingSettings) { SettingsView() }
+        .onAppear {
+            // Only pre-select on iPad. In the collapsed (iPhone) layout a
+            // non-nil selection is a pushed view, so doing this there would
+            // launch the app one screen deep with a back button.
+            if sizeClass == .regular, selection == nil { selection = .overview }
+        }
+        .onChange(of: model.monitors) { _, monitors in
+            // A monitor can be removed from its own detail pane or from
+            // Settings. Either way the selection would otherwise point at
+            // something that no longer exists, leaving a frozen pane.
+            if case .monitor(let id) = selection,
+               !monitors.contains(where: { $0.id == id }) {
+                selection = sizeClass == .regular ? .overview : nil
+            }
+        }
+    }
+
+    // MARK: - Sidebar
+
+    private var sidebar: some View {
+        List(selection: $selection) {
+            if !model.monitors.isEmpty {
+                Section {
+                    Label("All monitors", systemImage: "square.grid.2x2")
+                        .tag(Selection.overview)
+                }
+            }
+
+            Section("Monitors") {
+                ForEach(model.monitors) { monitor in
+                    MonitorRow(monitor: monitor)
+                        .tag(Selection.monitor(monitor.id))
+                }
+                .onDelete { model.remove(atOffsets: $0) }
+                .onMove { model.move(fromOffsets: $0, toOffset: $1) }
+
                 if model.monitors.isEmpty {
-                    EmptyStateView { showingAdd = true }
-                } else {
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 14) {
-                            ForEach(model.monitors) { monitor in
-                                NavigationLink(value: monitor.id) {
-                                    MonitorTile(monitor: monitor)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal)
-                        .padding(.top, 4)
-                    }
-                    .refreshable { await model.refreshAll() }
+                    Button("Add a monitor") { showingAdd = true }
                 }
             }
-            .navigationTitle("Air Quality")
-            .navigationDestination(for: UUID.self) { id in
-                if let monitor = model.monitor(id: id) {
-                    MonitorDetailView(monitor: monitor)
+        }
+        .listStyle(.sidebar)
+        .navigationTitle("Air Quality")
+        .refreshable { await model.refreshAll() }
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { showingSettings = true } label: {
+                    Label("Settings", systemImage: "gearshape")
                 }
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { showingSettings = true } label: {
-                        Label("Settings", systemImage: "gearshape")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingAdd = true } label: {
-                        Label("Add monitor", systemImage: "plus")
-                    }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showingAdd = true } label: {
+                    Label("Add monitor", systemImage: "plus")
                 }
             }
-            .sheet(isPresented: $showingAdd) { AddMonitorView() }
-            .sheet(isPresented: $showingSettings) { SettingsView() }
+        }
+    }
+
+    // MARK: - Detail
+
+    @ViewBuilder
+    private var detail: some View {
+        switch selection {
+        case .overview:
+            OverviewGrid(select: { selection = .monitor($0) })
+        case .monitor(let id):
+            if let monitor = model.monitor(id: id) {
+                MonitorDetailView(monitor: monitor)
+            } else {
+                ContentUnavailableView("Monitor removed", systemImage: "sensor.fill")
+            }
+        case nil:
+            if model.monitors.isEmpty {
+                ContentUnavailableView {
+                    Label("No monitors yet", systemImage: "sensor")
+                } description: {
+                    Text("Add an AirGradient monitor on this network, or connect an AirGradient cloud account.")
+                } actions: {
+                    Button("Add a monitor") { showingAdd = true }
+                        .buttonStyle(.borderedProminent)
+                }
+            } else {
+                ContentUnavailableView("Select a monitor", systemImage: "square.grid.2x2")
+            }
         }
     }
 }
 
-private struct EmptyStateView: View {
-    var add: () -> Void
+/// One line in the sidebar: enough to answer "is anything wrong" without
+/// selecting it, which is what makes the always-visible list worth its width.
+private struct MonitorRow: View {
+    @Environment(MonitorsModel.self) private var model
+    let monitor: Monitor
+
+    private var reading: Reading? { model.latest[monitor.id] }
+    private var pm25: Double? { reading.flatMap { Metric.pm25.value(from: $0, settings: model.settings) } }
+    private var band: QualityBand? { pm25.map { Metric.pm25.band($0) } }
 
     var body: some View {
-        ContentUnavailableView {
-            Label("No monitors yet", systemImage: "sensor")
-        } description: {
-            Text("Add an AirGradient monitor on this network, or connect an AirGradient cloud account.")
-        } actions: {
-            Button("Add a monitor", action: add)
-                .buttonStyle(.borderedProminent)
+        HStack(spacing: 10) {
+            Circle()
+                .fill(band?.color ?? .gray.opacity(0.4))
+                .frame(width: 10, height: 10)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(monitor.name)
+                    .lineLimit(1)
+                Text(band?.shortLabel ?? "No data")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(pm25.map { Metric.pm25.format($0) } ?? "—")
+                .font(.callout.weight(.medium).monospacedDigit())
+                .foregroundStyle(band?.color ?? .secondary)
+
+            StatusDot(status: model.status[monitor.id] ?? .idle)
         }
+        .padding(.vertical, 2)
     }
 }
 
-/// The dashboard card: headline PM2.5 with its AQI band as the background, and
-/// the three numbers people actually glance at underneath.
+/// The tile grid, now a destination in the detail pane rather than the app root.
+private struct OverviewGrid: View {
+    @Environment(MonitorsModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    var select: (UUID) -> Void
+
+    private var columns: [GridItem] {
+        // Wider tiles on iPad: the phone minimum would give six cramped columns
+        // across a 12.9" landscape canvas.
+        [GridItem(.adaptive(minimum: sizeClass == .regular ? 240 : 165), spacing: 16)]
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 16) {
+                ForEach(model.monitors) { monitor in
+                    Button { select(monitor.id) } label: {
+                        MonitorTile(monitor: monitor)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("All monitors")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await model.refreshAll() }
+    }
+}
+
+/// The dashboard card: headline PM2.5 with its AQI band, and the three numbers
+/// people actually glance at underneath.
 struct MonitorTile: View {
     @Environment(MonitorsModel.self) private var model
     let monitor: Monitor
@@ -117,7 +236,7 @@ struct MonitorTile: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardBackground(cornerRadius: 16)
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder((band?.color ?? .gray).opacity(0.35), lineWidth: 1)
         )
         .opacity(status.errorText == nil ? 1 : 0.55)

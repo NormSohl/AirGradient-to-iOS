@@ -3,23 +3,27 @@
 Poll data from a local AirGradient device and persist and display in an iOS
 app. iPad first, but works on iPhone.
 
-> **Status:** the app is universal (iPhone + iPad) and runs on both, but the
-> layout is currently iPhone-shaped — a `NavigationStack` with an adaptive
-> grid, which on iPad reads as a stretched phone app rather than something
-> designed for the larger canvas. Making it genuinely iPad-first means a
-> `NavigationSplitView` with the monitor list in the sidebar and the detail
-> pane always visible. Not done yet.
-
 A native SwiftUI app for [AirGradient](https://www.airgradient.com) air-quality
 monitors — AirGradient ONE (indoor) and Open Air (outdoor). It reads the
 monitor's **local HTTP API** over your own WiFi, so it works with no account, no
 cloud round trip, and no internet connection at all. An AirGradient cloud token
-is optional, and only needed for monitors that aren't on the same network as the
-phone.
+is optional, and only needed for monitors that aren't on the same network as
+the device running the app.
+
+## Layout
+
+Built iPad-first around a `NavigationSplitView`: the monitor list stays on
+screen in the sidebar — each row carrying enough (name, band colour, PM2.5,
+liveness) to answer "is anything wrong" without selecting it — next to a
+full-size detail pane. That is the point on a tablet parked on a shelf showing
+air quality all day. On iPhone the same hierarchy collapses to push navigation
+for free, so there is one view tree rather than two size-class branches to keep
+in step. Tile size and chart height widen in the regular size class; nothing
+else forks.
 
 ## What it does
 
-- **Dashboard** of every monitor, each tile headlined by PM2.5 and its US EPA
+- **Overview grid** of every monitor, each tile headlined by PM2.5 and its US EPA
   AQI band, with CO₂, temperature and humidity underneath.
 - **Detail page** per monitor: all eight metrics (PM1 / PM2.5 / PM10, CO₂,
   temperature, humidity, VOC index, NOx index), a trend chart, device

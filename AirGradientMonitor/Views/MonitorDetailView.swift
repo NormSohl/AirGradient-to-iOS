@@ -2,7 +2,7 @@ import SwiftUI
 
 struct MonitorDetailView: View {
     @Environment(MonitorsModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let monitor: Monitor
 
     @State private var chartMetric: Metric = .pm25
@@ -15,7 +15,9 @@ struct MonitorDetailView: View {
     private var status: MonitorsModel.Status { model.status[monitor.id] ?? .idle }
     private var settings: Settings { model.settings }
 
-    private let columns = [GridItem(.adaptive(minimum: 150), spacing: 12)]
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: sizeClass == .regular ? 190 : 150), spacing: 12)]
+    }
 
     var body: some View {
         ScrollView {
@@ -62,11 +64,11 @@ struct MonitorDetailView: View {
                         Task { await model.refresh(monitor.id) }
                     }
                     Divider()
+                    // DashboardView watches `model.monitors` and moves its
+                    // selection off a monitor that stops existing, which pops
+                    // this view in the collapsed layout and swaps the detail
+                    // pane in the regular one.
                     Button("Remove monitor", role: .destructive) {
-                        // Pop first: this view is built from a monitor that is
-                        // about to stop existing, and staying on it would show
-                        // a page whose data can never update again.
-                        dismiss()
                         model.remove(monitor)
                     }
                 } label: {
