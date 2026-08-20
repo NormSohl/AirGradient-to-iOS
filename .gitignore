@@ -1,0 +1,7 @@
+# Xcode: per-user state and build products. The .xcodeproj itself and its
+# shared scheme are tracked, so the project opens and builds from a clean clone.
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
