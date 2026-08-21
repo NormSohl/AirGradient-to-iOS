@@ -70,6 +70,25 @@ final class MonitorsModel {
         Task { await refresh(monitor.id) }
     }
 
+    /// Adds the demo monitor with two days of history already recorded, so the
+    /// charts say something immediately. Someone evaluating the app — a
+    /// reviewer, or anyone without a device yet — should not have to wait an
+    /// hour to find out whether it draws anything.
+    func addDemoMonitor() {
+        guard !monitors.contains(where: { $0.isDemo }) else { return }
+        let monitor = DemoSource.monitor
+        monitors.append(monitor)
+        persistMonitors()
+        for reading in DemoSource.backfill() {
+            _ = history.record(reading, for: monitor.id)
+        }
+        history.flush()
+        historyVersion &+= 1
+        Task { await refresh(monitor.id) }
+    }
+
+    var hasDemoMonitor: Bool { monitors.contains { $0.isDemo } }
+
     func remove(_ monitor: Monitor) {
         monitors.removeAll { $0.id == monitor.id }
         latest[monitor.id] = nil
@@ -145,6 +164,15 @@ final class MonitorsModel {
         guard let monitor = monitor(id: id) else { return }
         if status[id] == .loading { return }
         status[id] = .loading
+
+        if monitor.isDemo {
+            let reading = DemoSource.reading(at: Date())
+            latest[id] = reading
+            status[id] = .ok(Date())
+            if history.record(reading, for: id) { historyVersion &+= 1 }
+            absorbIdentity(reading, into: id)
+            return
+        }
 
         do {
             let reading = try await AirGradientClient.shared.reading(for: monitor, token: settings.cloudToken)

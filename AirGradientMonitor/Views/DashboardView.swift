@@ -49,6 +49,15 @@ struct DashboardView: View {
             // A monitor can be removed from its own detail pane or from
             // Settings. Either way the selection would otherwise point at
             // something that no longer exists, leaving a frozen pane.
+            // Adding the first monitor from an empty state leaves the
+            // selection nil, and in the regular layout the sidebar may be
+            // hidden — which strands you on "Select a monitor" with no list in
+            // sight. Show what was just added instead. Compact is fine as it
+            // is: nil selection there means the list itself is on screen.
+            if selection == nil, sizeClass == .regular, let added = monitors.last {
+                selection = .monitor(added.id)
+            }
+
             if case .monitor(let id) = selection,
                !monitors.contains(where: { $0.id == id }) {
                 // Same reasoning as the launch pre-selection: falling back to
@@ -80,6 +89,10 @@ struct DashboardView: View {
 
                 if model.monitors.isEmpty {
                     Button("Add a monitor") { showingAdd = true }
+                    // The sidebar *is* the first screen on iPhone, so the demo
+                    // has to be offered here too — not only in the detail
+                    // pane's empty state, which a phone never shows first.
+                    Button("Try sample data") { model.addDemoMonitor() }
                 }
             }
         }
@@ -122,6 +135,7 @@ struct DashboardView: View {
                 } actions: {
                     Button("Add a monitor") { showingAdd = true }
                         .buttonStyle(.borderedProminent)
+                    Button("Try sample data") { model.addDemoMonitor() }
                 }
             } else {
                 ContentUnavailableView("Select a monitor", systemImage: "square.grid.2x2")

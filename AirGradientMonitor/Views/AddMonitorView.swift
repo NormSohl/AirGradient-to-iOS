@@ -22,6 +22,7 @@ struct AddMonitorView: View {
                 discoverySection
                 manualSection
                 cloudSection
+                demoSection
             }
             .navigationTitle("Add monitor")
             .navigationBarTitleDisplayMode(.inline)
@@ -101,6 +102,26 @@ struct AddMonitorView: View {
             Text("By address")
         } footer: {
             Text("The address is checked before it is saved, so a typo is caught here rather than showing up as a monitor that never has any data.")
+        }
+    }
+
+    /// Last in the form on purpose: someone holding a monitor should reach for
+    /// discovery, not this.
+    private var demoSection: some View {
+        Section {
+            if model.hasDemoMonitor {
+                Label("Added", systemImage: "checkmark.circle")
+                    .foregroundStyle(.secondary)
+            } else {
+                Button("Add sample data") {
+                    model.addDemoMonitor()
+                    dismiss()
+                }
+            }
+        } header: {
+            Text("No monitor yet?")
+        } footer: {
+            Text("Adds a made-up monitor with two days of history, so you can see what the app does without a device. Remove it like any other monitor.")
         }
     }
 

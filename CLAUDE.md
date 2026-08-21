@@ -212,9 +212,14 @@ plist without moving those.
 
 ## Testing notes
 
-- **The Simulator cannot see Bonjour services on the LAN** the way a device can,
-  and never shows the local-network permission prompt. Test discovery on real
-  hardware, or add a monitor by IP address.
+- **The Simulator *can* browse Bonjour on the LAN** — it shares the Mac's
+  network stack, and `AddMonitorView` listed a real monitor there. An earlier
+  note here claimed otherwise and sent people to fetch hardware for no reason.
+  What the Simulator genuinely cannot show is the **local-network permission
+  prompt**, which only appears on a device; that part still needs real hardware.
+- **The demo monitor makes the Simulator a complete test rig.** `DemoSource`
+  needs no network at all, so the whole UI — tiles, bands, charts, gaps — can be
+  exercised without a device on the desk.
 - With no monitor to hand, `AirGradientClient` takes an injected `URLSession`,
   which is the seam for a stubbed protocol.
 - **Retention logic is testable without waiting a year.** Compile `Reading.swift`
@@ -226,6 +231,27 @@ plist without moving those.
   layout — the split view's collapse/expand behaviour (rotation mid-selection,
   Slide Over) is where `NavigationSplitView` most often surprises, and it cannot
   be checked by reading.
+
+## Demo mode
+
+`DemoSource` generates readings from the clock and `MonitorsModel.addDemoMonitor()`
+installs a monitor backed by them, with two days of history already recorded.
+
+- **It exists for App Review first.** A reviewer has no AirGradient hardware, so
+  without it the app they receive shows an empty state, finds nothing, and reads
+  as incomplete under Guideline 2.1. It is offered from both empty states (the
+  detail pane's and the sidebar's — a phone only ever sees the latter first) and
+  from the bottom of *Add monitor*.
+- **The numbers are deterministic, never random.** They are a pure function of
+  the timestamp, so a chart redraw cannot make the past jitter.
+- **The day has a story in it**: CO₂ climbing overnight into a warning band, and
+  a PM2.5 spike at dinner that reaches ~34 µg/m³. Band colouring and the AQI
+  wording demonstrate nothing if everything is green, so the demo must not be.
+- **Backfill spacing (120 s) must stay under `HistorySection`'s gap threshold.**
+  Sampled any sparser, every point reads as a break in recording and the demo
+  draws as confetti.
+- **`Monitor.isDemo` is not `isLocal`**, so the local controls stay hidden —
+  there is no device to send a calibration request to.
 
 ## Not built, deliberately
 

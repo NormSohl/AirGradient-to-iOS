@@ -62,6 +62,11 @@ actor AirGradientClient {
             let all = try await cloudReadings(token: token)
             guard let r = all[locationId] else { throw AirGradientError.locationMissing(locationId) }
             return r
+        case .demo:
+            // MonitorsModel answers demo monitors without coming here, but a
+            // client that lies about a source it was handed is worse than one
+            // extra line.
+            return DemoSource.reading(at: Date())
         }
     }
 

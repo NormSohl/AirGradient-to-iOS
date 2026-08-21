@@ -13,6 +13,8 @@ struct Monitor: Codable, Hashable, Identifiable {
         case local(host: String)
         /// `locationId` as reported by the cloud for this token's account.
         case cloud(locationId: Int)
+        /// Generated readings, no device. See `DemoSource`.
+        case demo
     }
 
     var id: UUID = UUID()
@@ -26,11 +28,15 @@ struct Monitor: Codable, Hashable, Identifiable {
     var firmware: String?
 
     var isLocal: Bool { if case .local = source { return true }; return false }
+    /// Deliberately not `isLocal`: the demo has no device to calibrate, so the
+    /// local controls must stay hidden for it.
+    var isDemo: Bool { source == .demo }
 
     var subtitle: String {
         switch source {
         case .local(let host): host
         case .cloud: "AirGradient cloud"
+        case .demo: "Sample data — no device"
         }
     }
 }
