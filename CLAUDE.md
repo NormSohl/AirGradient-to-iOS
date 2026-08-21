@@ -30,10 +30,13 @@ running **iPadOS 26.6**, from Xcode 16.2. An OS that far ahead of the toolchain
 is not the problem it looks like — `devicectl` opens a CoreDevice tunnel and
 installs fine, and the device shows up as an eligible `xcodebuild` destination.
 
-Still unexercised, because none of it can be answered without a real monitor on
-the LAN: discovery, polling, `HistoryStore`, the charts, and the entire cloud
-path. In particular the local-network permission prompt has never been seen —
-the Simulator never shows it.
+Confirmed against a real AirGradient monitor on the LAN: Bonjour discovery, the
+local-network permission prompt, `/measures/current`, the lenient `Reading`
+decode and the AQI banding all worked first try.
+
+Still unexercised: the entire cloud path, and long-run `HistoryStore` behaviour
+(the retention tiers are covered by the harness described under *Testing
+notes*, not by a year of actual running).
 
 ```sh
 xcodebuild -scheme AirGradientMonitor \
@@ -165,10 +168,28 @@ AirGradientMonitor/
 - **Polling runs only while the app is foregrounded** (`scenePhase` in
   `AirGradientMonitorApp`), and `stopPolling()` is what flushes the history to
   disk. A background poll would be refused once suspended anyway.
-- **History is app-recorded, ~1 sample/minute, capped at 1500.** The monitors
+- **History is app-recorded, ~1 sample/minute, and ages in tiers.** The monitors
   keep none of their own — `/measures/current` is exactly what it says. So the
   chart has real gaps whenever the app was closed, and the empty state says so
   outright rather than looking broken. Don't "fix" the gaps.
+- **Retention is time-based, not a sample count.** Samples keep minute
+  resolution for 48 h, then average into one point per hour, and drop past a
+  year: ~11,600 samples, about 0.9 MB. The flat 1500-sample cap this replaced
+  was 25 hours of history no matter how long the app ran, which defeats the
+  point of leaving an iPad on a shelf. `compact(_:now:)` is idempotent, so
+  re-running it never re-averages an already-rolled hour.
+- **Averaging an absent sensor must yield nil, not 0.** Same rule as the tiles,
+  and easier to get wrong here: an hour where CO₂ reported nothing has to stay
+  nil through the roll-up, or the chart grows a plunge to zero that never
+  happened.
+- **Compaction is rate-limited to once every 10 minutes, and history is
+  flushed every 5.** Both exist for the kiosk case. Compacting on every append
+  costs ~27 ms of main-actor time a year in, once a minute, behind a display
+  someone is always looking at; rate-limiting takes it to ~0.6 ms. And `flush()`
+  on `scenePhase` never fires on a device that never backgrounds, so without the
+  periodic write a power cut loses everything since launch. The periodic write
+  encodes off the main actor; `flush()` stays synchronous because a detached
+  write may not survive suspension.
 - **A manually typed address is probed before it is saved.** A monitor added
   from a typo is indistinguishable from one that is merely offline, and the
   difference matters to someone standing next to a working device.
@@ -196,6 +217,11 @@ plist without moving those.
   hardware, or add a monitor by IP address.
 - With no monitor to hand, `AirGradientClient` takes an injected `URLSession`,
   which is the seam for a stubbed protocol.
+- **Retention logic is testable without waiting a year.** Compile `Reading.swift`
+  and `HistoryStore.swift` together with a small `@main` harness for macOS
+  (`xcrun swiftc -O -o t Reading.swift HistoryStore.swift t.swift`) and feed it
+  synthetic timestamps. That is how the tier boundaries, hour alignment, nil
+  preservation and per-append cost above were actually measured.
 - `xcrun simctl io booted screenshot` is how to actually *look* at the iPad
   layout — the split view's collapse/expand behaviour (rotation mid-selection,
   Slide Over) is where `NavigationSplitView` most often surprises, and it cannot
