@@ -25,8 +25,15 @@ iOS 18.2 SDK: zero errors, zero warnings. Launched on an iPad Pro 13-inch (M4)
 and an iPhone 16 Pro, both iOS 18.3.1 — the split view collapses correctly on
 the phone, with no phantom pushed screen.
 
+Also runs on hardware: installed and launched on an iPad Pro 11-inch (M4)
+running **iPadOS 26.6**, from Xcode 16.2. An OS that far ahead of the toolchain
+is not the problem it looks like — `devicectl` opens a CoreDevice tunnel and
+installs fine, and the device shows up as an eligible `xcodebuild` destination.
+
 Still unexercised, because none of it can be answered without a real monitor on
-the LAN: polling, `HistoryStore`, the charts, and the entire cloud path.
+the LAN: discovery, polling, `HistoryStore`, the charts, and the entire cloud
+path. In particular the local-network permission prompt has never been seen —
+the Simulator never shows it.
 
 ```sh
 xcodebuild -scheme AirGradientMonitor \
@@ -48,8 +55,17 @@ Requires **Xcode 16+** (the project uses file-system-synchronized groups,
 turning it on will surface a batch of actor-isolation warnings that are
 deliberately unaddressed.
 
-Before running on hardware: set a real `DEVELOPMENT_TEAM` and change
-`PRODUCT_BUNDLE_IDENTIFIER` from `com.example.AirGradientMonitor`.
+`DEVELOPMENT_TEAM` (342G7AUKSH) and `PRODUCT_BUNDLE_IDENTIFIER`
+(`com.sohl.AirGradientMonitor`) are now set for real; the `com.example`
+placeholder is gone.
+
+Deploying to a *new* device needs it registered with the developer account
+first. `xcodebuild -allowProvisioningUpdates` does not reliably do this from the
+command line — it fails with "isn't registered in your developer account", and
+an install that gets as far as `0xe8008012 (This provisioning profile cannot be
+installed on this device)` means the same thing. Opening the project in Xcode
+and hitting Run registers the device and reissues the profile in one step;
+after that the CLI works again.
 
 When fixing first-compile errors, fix the *compile* error. Several things here
 look wrong at a glance and are not — each one has a comment saying why, and the
