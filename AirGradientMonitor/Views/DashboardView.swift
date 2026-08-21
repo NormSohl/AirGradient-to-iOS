@@ -36,7 +36,14 @@ struct DashboardView: View {
             // Only pre-select on iPad. In the collapsed (iPhone) layout a
             // non-nil selection is a pushed view, so doing this there would
             // launch the app one screen deep with a back button.
-            if sizeClass == .regular, selection == nil { selection = .overview }
+            //
+            // With no monitors there is nothing to overview: the grid would
+            // draw an empty LazyVGrid, and the sidebar hides its "All monitors"
+            // row in that state anyway. Leaving the selection nil is what lets
+            // the detail pane show the empty state that offers to add one.
+            if sizeClass == .regular, selection == nil, !model.monitors.isEmpty {
+                selection = .overview
+            }
         }
         .onChange(of: model.monitors) { _, monitors in
             // A monitor can be removed from its own detail pane or from
@@ -44,7 +51,10 @@ struct DashboardView: View {
             // something that no longer exists, leaving a frozen pane.
             if case .monitor(let id) = selection,
                !monitors.contains(where: { $0.id == id }) {
-                selection = sizeClass == .regular ? .overview : nil
+                // Same reasoning as the launch pre-selection: falling back to
+                // the overview after removing the *last* monitor would land on
+                // the same blank grid.
+                selection = (sizeClass == .regular && !monitors.isEmpty) ? .overview : nil
             }
         }
     }

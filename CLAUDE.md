@@ -20,14 +20,27 @@ Foundation, SwiftUI, Swift Charts and Network.framework.
 
 ## Build status — READ THIS FIRST
 
-**This code has never been compiled.** It was written in a Linux container with
-no Swift toolchain; verification was limited to delimiter balance and reading.
-The first `xcodebuild` on a Mac is genuinely the first one.
+**Compiles clean and runs.** First compiled 2026-08-20, Xcode 16.2 against the
+iOS 18.2 SDK: zero errors, zero warnings. Launched on an iPad Pro 13-inch (M4)
+and an iPhone 16 Pro, both iOS 18.3.1 — the split view collapses correctly on
+the phone, with no phantom pushed screen.
+
+Still unexercised, because none of it can be answered without a real monitor on
+the LAN: polling, `HistoryStore`, the charts, and the entire cloud path.
 
 ```sh
 xcodebuild -scheme AirGradientMonitor \
-  -destination "platform=iOS Simulator,name=$(xcrun simctl list devicetypes | grep -o 'iPad Pro 13-inch.*' | head -1)" build
+  -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)' build
 ```
+
+**A matching simulator *runtime* is required, not just a matching Xcode.**
+`actool` refuses to compile `Assets.xcassets` unless an installed simulator
+runtime matches the SDK version, and it does this even when the destination is
+`--platform iphoneos` — so an out-of-date runtime set fails the *device* build
+too, with an error that confusingly names the simulator. The tell is
+`xcodebuild -showdestinations` listing no eligible destinations at all, then the
+build dying at `CompileAssetCatalog`. Fix it with `xcodebuild -downloadPlatform
+iOS`; there is nothing to change in this project.
 
 Requires **Xcode 16+** (the project uses file-system-synchronized groups,
 `objectVersion = 77`, so adding a Swift file needs no project edit) and targets
@@ -54,6 +67,14 @@ two things fork on `horizontalSizeClass` — tile minimum width and chart height
 - **Launch selection is iPad-only.** In the collapsed layout a non-nil selection
   *is* a pushed view, so pre-selecting on iPhone would launch the app one screen
   deep behind a back button.
+- **Neither the launch pre-selection nor the removal fallback may select
+  `.overview` while `monitors` is empty.** `OverviewGrid` over an empty array
+  draws an empty `LazyVGrid` — a blank pane, not an empty state — and the
+  sidebar hides its "All monitors" row in that state, so the selection points at
+  a row that isn't there. Both sites are guarded on `!monitors.isEmpty` so the
+  detail pane falls through to the `case nil` "No monitors yet" view with its
+  Add button. Dropping either guard makes a fresh install open on a blank
+  screen, which is how this shipped until it was seen on a simulator.
 - **Removal is handled in exactly one place**: `DashboardView` watches
   `model.monitors` and moves its selection off a monitor that stopped existing.
   That pops the view when collapsed and swaps the pane when not. Do not add a
