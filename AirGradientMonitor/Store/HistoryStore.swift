@@ -21,7 +21,8 @@ final class HistoryStore {
     /// How long samples keep full one-a-minute resolution. Past this they are
     /// averaged into hourly points: a chart weeks wide cannot draw minute
     /// detail anyway, and keeping it would cost a sample per minute forever.
-    private let fineWindow: TimeInterval = 48 * 3600
+    static let fineWindow: TimeInterval = 48 * 3600
+    private var fineWindow: TimeInterval { Self.fineWindow }
 
     /// Hourly points are dropped past this age. A year of them is ~8,760
     /// samples per monitor — a few MB of JSON, small enough to keep whole.

@@ -17,6 +17,10 @@ struct HistorySection: View {
         let date: Date
         let value: Double
         let band: QualityBand
+        /// Which unbroken stretch of recording this belongs to. Drawn as the
+        /// mark's `series`, so the line and fill break at gaps instead of
+        /// bridging them.
+        var segment: Int = 0
     }
 
     @MainActor
@@ -26,7 +30,7 @@ struct HistorySection: View {
         // samples arrive.
         _ = model.historyVersion
         let settings = model.settings
-        return model.history.history(for: monitor.id).compactMap { reading in
+        let raw = model.history.history(for: monitor.id).compactMap { reading -> Point? in
             guard let v = metric.value(from: reading, settings: settings) else { return nil }
             return Point(
                 date: reading.timestamp,
@@ -34,6 +38,40 @@ struct HistorySection: View {
                 band: metric.band(v, fahrenheit: settings.fahrenheit)
             )
         }
+        return segmented(raw)
+    }
+
+    /// Splits the series wherever nothing was recorded for long enough that a
+    /// line across the gap would be a claim rather than a measurement.
+    ///
+    /// Polling only runs in the foreground, so closing the app leaves a real
+    /// hole. Drawn as one series, Swift Charts would join the last sample
+    /// before the gap to the first one after it and fill underneath — a smooth
+    /// trend nobody observed.
+    ///
+    /// The threshold has to know which tier a sample is in: rolled-up points
+    /// are an hour apart on purpose, and would otherwise read as gaps. Judging
+    /// by the age of the *earlier* point also keeps the boundary between the
+    /// tiers from splitting, where an hourly point is legitimately followed a
+    /// full hour later by the first minute-resolution one.
+    private func segmented(_ points: [Point]) -> [Point] {
+        guard points.count > 1 else { return points }
+        let now = Date()
+        var out: [Point] = []
+        out.reserveCapacity(points.count)
+        var segment = 0
+        for (i, p) in points.enumerated() {
+            if i > 0 {
+                let previous = points[i - 1]
+                let rolled = now.timeIntervalSince(previous.date) > HistoryStore.fineWindow
+                let limit: TimeInterval = rolled ? 3 * 3600 : 3 * 60
+                if p.date.timeIntervalSince(previous.date) > limit { segment += 1 }
+            }
+            var q = p
+            q.segment = segment
+            out.append(q)
+        }
+        return out
     }
 
     /// Gradient stops that carry the band colouring along the x axis, so the
@@ -124,7 +162,8 @@ struct HistorySection: View {
                 Chart(series) { point in
                     LineMark(
                         x: .value("Time", point.date),
-                        y: .value(metric.title, point.value)
+                        y: .value(metric.title, point.value),
+                        series: .value("Recording", point.segment)
                     )
                     .interpolationMethod(.monotone)
                     .lineStyle(StrokeStyle(lineWidth: 2))
@@ -132,7 +171,8 @@ struct HistorySection: View {
 
                     AreaMark(
                         x: .value("Time", point.date),
-                        y: .value(metric.title, point.value)
+                        y: .value(metric.title, point.value),
+                        series: .value("Recording", point.segment)
                     )
                     .interpolationMethod(.monotone)
                     // Same colouring, well below the line: the fill is there to
