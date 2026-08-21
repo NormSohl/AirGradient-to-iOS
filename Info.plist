@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>AirGradient</string>
+	<string>Aetherfield</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,6 +22,18 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_airgradient._tcp</string>
+		<string>_http._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Finds AirGradient monitors on your WiFi and reads their measurements directly, without going through the cloud.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
@@ -37,24 +49,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-
-	<!-- Bonjour discovery. Without BOTH of these iOS fails the browse with no
-	     callback at all, which is indistinguishable from "no monitors here". -->
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Finds AirGradient monitors on your WiFi and reads their measurements directly, without going through the cloud.</string>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_airgradient._tcp</string>
-		<string>_http._tcp</string>
-	</array>
-
-	<!-- The monitors serve plain HTTP on the LAN and have no certificate to
-	     present, so ATS has to allow local networking. This exception is scoped
-	     to local names only; the cloud API is still required to be HTTPS. -->
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
 </dict>
 </plist>
