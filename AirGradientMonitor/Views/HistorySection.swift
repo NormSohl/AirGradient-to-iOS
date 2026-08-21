@@ -74,6 +74,24 @@ struct HistorySection: View {
         return stops
     }
 
+    /// X-axis interval, never finer than an hour.
+    ///
+    /// Left automatic, Swift Charts picks whatever divides the span neatly —
+    /// which on a few hours of history means half-hour ticks, so the axis fills
+    /// with :30 labels that carry no information anyone wants. An hour is the
+    /// smallest unit worth labelling here, and stepping up from there keeps the
+    /// tick count roughly constant as the history grows.
+    private func axisStride(_ series: [Point]) -> (Calendar.Component, Int) {
+        guard let first = series.first, let last = series.last else { return (.hour, 1) }
+        switch last.date.timeIntervalSince(first.date) / 3600 {
+        case ..<7:   return (.hour, 1)
+        case ..<15:  return (.hour, 3)
+        case ..<30:  return (.hour, 6)
+        case ..<80:  return (.hour, 12)
+        default:     return (.day, 1)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -121,7 +139,10 @@ struct HistorySection: View {
                     // give the line a body, not to compete with it.
                     .foregroundStyle(bandGradient.opacity(0.22))
                 }
-                .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) }
+                .chartXAxis {
+                    let step = axisStride(series)
+                    AxisMarks(values: .stride(by: step.0, count: step.1))
+                }
                 .chartYAxis { AxisMarks(position: .leading) }
                 // The chart is the main reason to look at this on a tablet;
                 // give it the extra height the wider pane affords.
