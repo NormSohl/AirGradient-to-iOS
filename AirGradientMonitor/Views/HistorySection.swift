@@ -36,6 +36,44 @@ struct HistorySection: View {
         }
     }
 
+    /// Gradient stops that carry the band colouring along the x axis, so the
+    /// line and its fill read green/amber/red exactly where the readings did.
+    ///
+    /// Each run of same-banded samples emits a stop at its start and end, which
+    /// holds the colour flat across the run and switches sharply between runs.
+    /// Runs shorter than 1/64 of the span are folded into the one before them:
+    /// a reading dithering across a band boundary would otherwise produce
+    /// hundreds of stops and a muddy smear.
+    private func bandStops(_ series: [Point]) -> [Gradient.Stop] {
+        guard let first = series.first, let last = series.last else { return [] }
+        let span = last.date.timeIntervalSince(first.date)
+        guard span > 0 else {
+            return [Gradient.Stop(color: first.band.color, location: 0),
+                    Gradient.Stop(color: first.band.color, location: 1)]
+        }
+
+        let minRun = span / 64
+        var stops: [Gradient.Stop] = []
+        var i = 0
+        while i < series.count {
+            var j = i
+            while j + 1 < series.count, series[j + 1].band == series[i].band { j += 1 }
+
+            let start = series[i].date.timeIntervalSince(first.date) / span
+            let end = series[j].date.timeIntervalSince(first.date) / span
+
+            if (end - start) * span < minRun, !stops.isEmpty {
+                stops[stops.count - 1].location = end   // absorb the blip
+            } else {
+                let color = series[i].band.color
+                stops.append(Gradient.Stop(color: color, location: start))
+                stops.append(Gradient.Stop(color: color, location: end))
+            }
+            i = j + 1
+        }
+        return stops
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -59,26 +97,29 @@ struct HistorySection: View {
                     .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
                     .multilineTextAlignment(.center)
             } else {
+                let bandGradient = LinearGradient(
+                    stops: bandStops(series),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+
                 Chart(series) { point in
                     LineMark(
                         x: .value("Time", point.date),
                         y: .value(metric.title, point.value)
                     )
                     .interpolationMethod(.monotone)
-                    .foregroundStyle(.tint)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .foregroundStyle(bandGradient)
 
                     AreaMark(
                         x: .value("Time", point.date),
                         y: .value(metric.title, point.value)
                     )
                     .interpolationMethod(.monotone)
-                    .foregroundStyle(
-                        .linearGradient(
-                            colors: [.accentColor.opacity(0.25), .accentColor.opacity(0.02)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+                    // Same colouring, well below the line: the fill is there to
+                    // give the line a body, not to compete with it.
+                    .foregroundStyle(bandGradient.opacity(0.22))
                 }
                 .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) }
                 .chartYAxis { AxisMarks(position: .leading) }

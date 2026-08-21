@@ -31,8 +31,11 @@ struct MonitorDetailView: View {
                         MetricCard(
                             metric: metric,
                             value: reading.flatMap { metric.value(from: $0, settings: settings) },
-                            settings: settings
-                        )
+                            settings: settings,
+                            isCharted: metric == chartMetric
+                        ) {
+                            withAnimation(.snappy) { chartMetric = metric }
+                        }
                     }
                 }
 
@@ -123,12 +126,33 @@ struct MetricCard: View {
     let metric: Metric
     let value: Double?
     let settings: Settings
+    /// Whether the history chart below is currently drawing this metric.
+    var isCharted = false
+    /// Tapping a tile points the chart at that metric. Optional so the tile
+    /// stays usable as a plain readout — the overview grid shows tiles that
+    /// select a monitor, not a metric.
+    var select: (() -> Void)?
 
     private var band: QualityBand? {
         value.map { metric.band($0, fahrenheit: settings.fahrenheit) }
     }
 
+    @ViewBuilder
     var body: some View {
+        if let select {
+            Button(action: select) { card }
+                .buttonStyle(.plain)
+                // Without this the tile reads as four separate labels and gives
+                // no hint that it does anything.
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(isCharted ? [.isButton, .isSelected] : .isButton)
+                .accessibilityHint("Shows this measurement in the history chart")
+        } else {
+            card
+        }
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(metric.title, systemImage: metric.symbol)
                 .font(.caption.weight(.medium))
@@ -151,6 +175,13 @@ struct MetricCard: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardBackground(cornerRadius: 14)
+        .overlay {
+            // Which tile the chart is following has to be visible, or tapping
+            // one looks like it did nothing when that metric has no reading
+            // yet and the chart stays on its empty state.
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.accentColor, lineWidth: isCharted ? 2 : 0)
+        }
     }
 }
 
