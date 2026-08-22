@@ -179,12 +179,53 @@ final class MonitorsModel {
             guard monitors.contains(where: { $0.id == id }) else { return } // removed mid-flight
             latest[id] = reading
             status[id] = .ok(Date())
-            if history.record(reading, for: id) { historyVersion &+= 1 }
+            // A cloud monitor's history comes from the cloud, not from what
+            // this app happened to observe. Recording here too would sprinkle
+            // app-timed points through a fetched series at slightly different
+            // timestamps.
+            if case .cloud(let locationId) = monitor.source {
+                await refreshCloudHistory(id: id, locationId: locationId)
+            } else if history.record(reading, for: id) {
+                historyVersion &+= 1
+            }
             absorbIdentity(reading, into: id)
         } catch {
             guard monitors.contains(where: { $0.id == id }) else { return }
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             status[id] = .failed(message, Date())
+        }
+    }
+
+    /// How long a fetched cloud series is reused before asking again. The
+    /// buckets are five minutes wide, so refetching faster only re-downloads
+    /// the same numbers.
+    private let cloudHistoryTTL: TimeInterval = 600
+    private var cloudHistoryFetched: [UUID: Date] = [:]
+
+    /// A week of 5-minute buckets is ~2,000 samples — enough to see a week's
+    /// pattern, small enough to hold and redraw.
+    private let cloudHistoryWindow: TimeInterval = 7 * 24 * 3600
+
+    private func refreshCloudHistory(id: UUID, locationId: Int) async {
+        if let last = cloudHistoryFetched[id], Date().timeIntervalSince(last) < cloudHistoryTTL { return }
+        cloudHistoryFetched[id] = Date()
+        let now = Date()
+        do {
+            let past = try await AirGradientClient.shared.cloudHistory(
+                locationId: locationId,
+                from: now.addingTimeInterval(-cloudHistoryWindow),
+                to: now,
+                token: settings.cloudToken
+            )
+            guard !past.isEmpty, monitors.contains(where: { $0.id == id }) else { return }
+            history.replace(past, for: id)
+            history.flush()
+            historyVersion &+= 1
+        } catch {
+            // A failed history fetch must not mark the monitor unreachable:
+            // the current reading already arrived, and that is what the tiles
+            // show. The chart simply keeps whatever it had.
+            cloudHistoryFetched[id] = nil
         }
     }
 

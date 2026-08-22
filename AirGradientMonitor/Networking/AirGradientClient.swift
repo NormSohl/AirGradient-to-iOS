@@ -99,6 +99,43 @@ actor AirGradientClient {
         return byLocation
     }
 
+    /// Past measures for one cloud location.
+    ///
+    /// `/measures/past` returns 5-minute buckets (or 60-minute for older
+    /// ranges, per AirGradient's spec) with exactly the field names
+    /// `/measures/current` uses, so `Reading` decodes these unchanged.
+    ///
+    /// The dates are ISO 8601 **basic** format with a UTC offset —
+    /// `20260821T000000Z`, no dashes or colons. The extended format the rest of
+    /// the world uses gets a 404 from this endpoint, which took a while to
+    /// work out because the auth middleware answers before routing: a bad path
+    /// with a bad token returns 401, not 404, so probing tells you nothing.
+    func cloudHistory(locationId: Int, from: Date, to: Date, token: String) async throws -> [Reading] {
+        let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { throw AirGradientError.noCloudToken }
+
+        var comps = URLComponents(string: "https://api.airgradient.com/public/api/v1/locations/\(locationId)/measures/past")!
+        comps.queryItems = [
+            URLQueryItem(name: "from", value: Self.basicISO(from)),
+            URLQueryItem(name: "to", value: Self.basicISO(to)),
+            URLQueryItem(name: "token", value: token),
+        ]
+        guard let url = comps.url else { throw AirGradientError.badURL }
+
+        let data = try await get(url)
+        return try JSONDecoder().decode([Reading].self, from: data)
+            .sorted { $0.timestamp < $1.timestamp }
+    }
+
+    /// `20260821T000000Z` — what `/measures/past` requires.
+    static func basicISO(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
+        return f.string(from: date)
+    }
+
     /// Discovery for the cloud: what locations does this token see?
     func cloudLocations(token: String) async throws -> [(id: Int, name: String)] {
         let all = try await cloudReadings(token: token, force: true)

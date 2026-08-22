@@ -88,6 +88,17 @@ final class HistoryStore {
         return true
     }
 
+    /// Replaces a monitor's whole series.
+    ///
+    /// For cloud monitors the history is not ours to accumulate — AirGradient
+    /// already recorded it, continuously, including while this app was closed.
+    /// Fetching it wholesale and replacing is what makes a cloud monitor's
+    /// chart complete where a local one honestly has holes.
+    func replace(_ series: [Reading], for id: UUID) {
+        samples[id] = compact(series.sorted { $0.timestamp < $1.timestamp }, now: Date())
+        dirty.insert(id)
+    }
+
     func forget(_ id: UUID) {
         samples[id] = nil
         dirty.remove(id)

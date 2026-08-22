@@ -41,6 +41,17 @@ struct HistorySection: View {
         return segmented(raw)
     }
 
+    /// How far apart samples are *meant* to be for this monitor's source.
+    ///
+    /// Local monitors are sampled by this app about once a minute. Cloud
+    /// history arrives pre-bucketed at five minutes, so judging it by the local
+    /// cadence would declare a gap between every pair of points and draw the
+    /// series as confetti.
+    private var expectedSpacing: TimeInterval {
+        if case .cloud = monitor.source { return 300 }
+        return 60
+    }
+
     /// Splits the series wherever nothing was recorded for long enough that a
     /// line across the gap would be a claim rather than a measurement.
     ///
@@ -64,7 +75,7 @@ struct HistorySection: View {
             if i > 0 {
                 let previous = points[i - 1]
                 let rolled = now.timeIntervalSince(previous.date) > HistoryStore.fineWindow
-                let limit: TimeInterval = rolled ? 3 * 3600 : 3 * 60
+                let limit: TimeInterval = rolled ? 3 * 3600 : expectedSpacing * 3
                 if p.date.timeIntervalSince(previous.date) > limit { segment += 1 }
             }
             var q = p
@@ -79,9 +90,14 @@ struct HistorySection: View {
     ///
     /// Each run of same-banded samples emits a stop at its start and end, which
     /// holds the colour flat across the run and switches sharply between runs.
-    /// Runs shorter than 1/64 of the span are folded into the one before them:
-    /// a reading dithering across a band boundary would otherwise produce
-    /// hundreds of stops and a muddy smear.
+    ///
+    /// Short runs fold into the run before them, or a reading dithering across
+    /// a band boundary produces hundreds of stops and a muddy smear. That
+    /// threshold counts **samples**, never a fraction of the visible span:
+    /// scaled to the span, a week-wide chart swallowed every excursion shorter
+    /// than about two hours — including the tallest spikes on it, which are
+    /// also the sharpest — and painted them the colour of the calm either
+    /// side. A half-hour spike to 490 drawn green is worse than no colouring.
     private func bandStops(_ series: [Point]) -> [Gradient.Stop] {
         guard let first = series.first, let last = series.last else { return [] }
         let span = last.date.timeIntervalSince(first.date)
@@ -90,26 +106,32 @@ struct HistorySection: View {
                     Gradient.Stop(color: first.band.color, location: 1)]
         }
 
-        let minRun = span / 64
-        var stops: [Gradient.Stop] = []
-        var i = 0
-        while i < series.count {
-            var j = i
-            while j + 1 < series.count, series[j + 1].band == series[i].band { j += 1 }
+        // Keep any run of two or more samples. If a pathological series still
+        // yields too many stops, coarsen and retry rather than handing the
+        // renderer thousands of them.
+        var minRunSamples = 2
+        while true {
+            var stops: [Gradient.Stop] = []
+            var i = 0
+            while i < series.count {
+                var j = i
+                while j + 1 < series.count, series[j + 1].band == series[i].band { j += 1 }
 
-            let start = series[i].date.timeIntervalSince(first.date) / span
-            let end = series[j].date.timeIntervalSince(first.date) / span
+                let startLoc = series[i].date.timeIntervalSince(first.date) / span
+                let endLoc = series[j].date.timeIntervalSince(first.date) / span
 
-            if (end - start) * span < minRun, !stops.isEmpty {
-                stops[stops.count - 1].location = end   // absorb the blip
-            } else {
-                let color = series[i].band.color
-                stops.append(Gradient.Stop(color: color, location: start))
-                stops.append(Gradient.Stop(color: color, location: end))
+                if (j - i + 1) < minRunSamples, !stops.isEmpty {
+                    stops[stops.count - 1].location = endLoc
+                } else {
+                    let color = series[i].band.color
+                    stops.append(Gradient.Stop(color: color, location: startLoc))
+                    stops.append(Gradient.Stop(color: color, location: endLoc))
+                }
+                i = j + 1
             }
-            i = j + 1
+            if stops.count <= 400 || minRunSamples > series.count { return stops }
+            minRunSamples *= 2
         }
-        return stops
     }
 
     /// X-axis interval, never finer than an hour.
