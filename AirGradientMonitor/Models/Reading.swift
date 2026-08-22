@@ -67,10 +67,16 @@ struct Reading: Codable, Hashable, Identifiable {
         case wifi, serialno, firmware, model
         case locationId, locationName
         // Cloud spellings of fields the local server names differently.
+        // Verified against a live /locations/measures/current response, not
+        // inferred from docs: the cloud says `_corrected` where the local
+        // server says `Compensated`, and `pm003Count` in the same camelCase
+        // the local server uses — an earlier `pm003_count` guess here was
+        // wrong, and is kept only in case some firmware emits it.
         case firmwareVersion
         case tvoc
         case timestamp
         case pm003_count
+        case pm02_corrected, atmp_corrected, rhum_corrected
     }
 
     init(from decoder: Decoder) throws {
@@ -79,13 +85,13 @@ struct Reading: Codable, Hashable, Identifiable {
         pm01 = c.number(.pm01)
         pm02 = c.number(.pm02)
         pm10 = c.number(.pm10)
-        pm02Compensated = c.number(.pm02Compensated)
+        pm02Compensated = c.number(.pm02Compensated) ?? c.number(.pm02_corrected)
         pm003Count = c.number(.pm003Count) ?? c.number(.pm003_count)
         rco2 = c.number(.rco2)
         atmp = c.number(.atmp)
-        atmpCompensated = c.number(.atmpCompensated)
+        atmpCompensated = c.number(.atmpCompensated) ?? c.number(.atmp_corrected)
         rhum = c.number(.rhum)
-        rhumCompensated = c.number(.rhumCompensated)
+        rhumCompensated = c.number(.rhumCompensated) ?? c.number(.rhum_corrected)
         tvocIndex = c.number(.tvocIndex) ?? c.number(.tvoc)
         noxIndex = c.number(.noxIndex)
         tvocRaw = c.number(.tvocRaw)

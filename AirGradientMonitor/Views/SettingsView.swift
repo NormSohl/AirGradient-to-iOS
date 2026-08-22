@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @Environment(MonitorsModel.self) private var model
@@ -27,13 +28,45 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    SecureField("API token", text: $model.settings.cloudToken)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                    HStack {
+                        SecureField("API token", text: $model.settings.cloudToken)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+
+                        // A token is pasted, never typed, and iOS can refuse a
+                        // cross-app paste silently — leaving no way to tell a
+                        // blocked paste from a bad token. An explicit button
+                        // makes the system ask, so refusing is visible.
+                        if model.settings.cloudToken.isEmpty {
+                            Button("Paste") {
+                                let pasted = UIPasteboard.general.string ?? ""
+                                model.settings.cloudToken = pasted
+                                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                            }
+                            .buttonStyle(.borderless)
+                        } else {
+                            Button {
+                                model.settings.cloudToken = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Clear token")
+                        }
+                    }
                 } header: {
                     Text("AirGradient cloud")
                 } footer: {
-                    Text("Optional. Create a long-term token at dashboard.airgradient.com to add locations that aren't on this network. Local monitors need no token.")
+                    // Secure fields are blanked in screenshots and show only
+                    // dots on screen, so "is anything in there?" is otherwise
+                    // unanswerable. The length says the field is populated
+                    // without putting the token itself on screen.
+                    if model.settings.cloudToken.isEmpty {
+                        Text("Optional. Create a long-term token at dashboard.airgradient.com to add locations that aren't on this network. Local monitors need no token.")
+                    } else {
+                        Text("Token set — \(model.settings.cloudToken.count) characters. Locations appear under Add monitor.")
+                    }
                 }
 
                 Section {

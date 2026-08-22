@@ -158,7 +158,7 @@ struct AddMonitorView: View {
         } header: {
             Text("AirGradient cloud")
         } footer: {
-            Text("Cloud readings are aggregated in five-minute buckets, so they lag a monitor on the same network. Use the cloud for places this iPhone isn't.")
+            Text("Cloud readings are aggregated in five-minute buckets, so they lag a monitor on the same network. Use the cloud for places this device isn't.")
         }
     }
 
