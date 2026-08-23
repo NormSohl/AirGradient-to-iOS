@@ -5,3 +5,6 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 *.xcworkspace/xcuserdata/
+
+# Local signing identity — see the comments in Signing.xcconfig
+Signing.local.xcconfig

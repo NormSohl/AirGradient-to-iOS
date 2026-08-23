@@ -1,0 +1,16 @@
+// Signing identity, kept out of the project file so a clone of this repo
+// carries nobody's developer account.
+//
+// The defaults below build for the Simulator as-is. To build for a device,
+// create Signing.local.xcconfig (gitignored) alongside this file:
+//
+//     DEVELOPMENT_TEAM = YOUR10CHARID
+//     PRODUCT_BUNDLE_IDENTIFIER = com.you.aetherfield
+//
+// The include is optional — `#include?` — so its absence is not an error.
+// Values there override the ones here, because later assignments win.
+
+DEVELOPMENT_TEAM =
+PRODUCT_BUNDLE_IDENTIFIER = com.example.aetherfield
+
+#include? "Signing.local.xcconfig"

@@ -59,9 +59,19 @@ Requires **Xcode 16+** (the project uses file-system-synchronized groups,
 turning it on will surface a batch of actor-isolation warnings that are
 deliberately unaddressed.
 
-`DEVELOPMENT_TEAM` (342G7AUKSH) and `PRODUCT_BUNDLE_IDENTIFIER`
-(`com.sohl.aetherfield`) are set for real. The app is named **Aetherfield**;
-the target and scheme are still `AirGradientMonitor`, which no user ever sees.
+The app is named **Aetherfield**; the target and scheme are still
+`AirGradientMonitor`, which no user ever sees.
+
+**Signing identity lives in `Signing.xcconfig`, not the project file.** That
+tracked file holds placeholder defaults that build for the Simulator as-is, and
+ends with `#include? "Signing.local.xcconfig"` — the `?` makes it optional, so a
+clone without one still builds. Real values go in `Signing.local.xcconfig`,
+which is gitignored. Do not put `DEVELOPMENT_TEAM` back into `project.pbxproj`.
+
+A plain (non-optional) `baseConfigurationReference` to a gitignored file is a
+**hard error** — "Unable to open base configuration reference file" — not a
+warning, so the tracked-defaults-plus-optional-include shape is the point, not
+decoration.
 
 Deploying to a *new* device needs it registered with the developer account
 first. `xcodebuild -allowProvisioningUpdates` does not reliably do this from the
