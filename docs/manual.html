@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aetherfield — Manual</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1c1e;
+    --muted: #5d6368;
+    --rule: #e2e5e8;
+    --card: #f6f7f8;
+    --accent: #1f9e59;
+    --good: #229e59;
+    --moderate: #d9a61a;
+    --sensitive: #e5761f;
+    --unhealthy: #d63838;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17191b;
+      --fg: #e9ecef;
+      --muted: #9aa1a8;
+      --rule: #2c3034;
+      --card: #1f2225;
+      --accent: #3ecf7f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 3rem 1.5rem 6rem; max-width: 46rem;
+    background: var(--bg); color: var(--fg);
+    font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  header { border-bottom: 1px solid var(--rule); padding-bottom: 1.5rem; margin-bottom: 2.5rem; }
+  h1 { font-size: 2.1rem; margin: 0 0 .3rem; letter-spacing: -.02em; }
+  .tagline { color: var(--muted); margin: 0; font-size: 1.05rem; }
+  h2 {
+    font-size: 1.25rem; margin: 2.75rem 0 .75rem; letter-spacing: -.01em;
+    padding-top: 1.25rem; border-top: 1px solid var(--rule);
+  }
+  h3 { font-size: 1rem; margin: 1.5rem 0 .4rem; }
+  p, li { color: var(--fg); }
+  .muted { color: var(--muted); }
+  ul, ol { padding-left: 1.3rem; }
+  li { margin: .35rem 0; }
+  code {
+    font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--card); padding: .12em .4em; border-radius: 4px;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+  th, td { text-align: left; padding: .55rem .7rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 600; }
+  .note {
+    background: var(--card); border-left: 3px solid var(--accent);
+    padding: .9rem 1.1rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;
+  }
+  .note p { margin: 0; }
+  .swatch { display: inline-block; width: .72em; height: .72em; border-radius: 50%; margin-right: .45em; vertical-align: baseline; }
+  footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .9rem; }
+  a { color: var(--accent); }
+  @media print {
+    body { max-width: none; padding: 0; font-size: 11pt; }
+    h2 { page-break-after: avoid; }
+    .note { border-left-color: #888; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Aetherfield</h1>
+  <p class="tagline">Air quality for AirGradient monitors, on iPhone and iPad.</p>
+</header>
+
+<p>Aetherfield reads AirGradient air-quality monitors over your local network. It
+needs no account, no subscription and no internet connection — the app talks
+straight to the monitor in your house. An AirGradient cloud account is optional,
+and only needed for monitors somewhere else.</p>
+
+<div class="note">
+  <p><strong>Aetherfield is an independent app.</strong> It is not made by, affiliated
+  with, or supported by AirGradient. Please don't send them questions about it.</p>
+</div>
+
+<h2>What you need</h2>
+<ul>
+  <li>An AirGradient monitor — <strong>ONE</strong> (indoor) or <strong>Open Air</strong> (outdoor)</li>
+  <li>Firmware <strong>3.0.10 or later</strong>, which is what serves the local API</li>
+  <li>The monitor and your device on the <strong>same Wi-Fi network</strong></li>
+  <li>iOS or iPadOS 17 or later</li>
+</ul>
+
+<h2>Adding a monitor</h2>
+
+<p>Tap <strong>+</strong>. There are three ways in.</p>
+
+<h3>On this network</h3>
+<p>Monitors running recent firmware announce themselves, and appear in this list
+by name. Tap one to add it.</p>
+
+<div class="note">
+  <p><strong>The first time, iOS asks for permission to find devices on your local
+  network. You must allow it.</strong> If you decline, discovery does not fail
+  loudly — it simply finds nothing, forever, and looks identical to having no
+  monitors. If the list stays empty, check
+  <em>Settings → Privacy &amp; Security → Local Network</em> and make sure
+  Aetherfield is switched on.</p>
+</div>
+
+<h3>By address</h3>
+<p>Type the monitor's IP address (<code>192.168.1.42</code>) or its hostname
+(<code>airgradient_abc123.local</code>). The address is checked before it is
+saved, so a typo is caught immediately rather than becoming a monitor that never
+shows data.</p>
+
+<h3>AirGradient cloud</h3>
+<p>For monitors that aren't on this network. Add an API token in Settings first —
+see <em>Cloud monitors</em> below — and your locations appear here.</p>
+
+<h3>No monitor yet?</h3>
+<p>Tap <strong>Add sample data</strong> to add a made-up monitor with two days of
+history. Nothing is contacted; it lets you see what the app does before buying
+hardware. Remove it like any other monitor.</p>
+
+<h2>Reading the numbers</h2>
+
+<p>Each tile shows a measurement, its unit, and a plain-language rating. Tap a
+tile to point the history chart at that measurement.</p>
+
+<table>
+  <tr><th>Measurement</th><th>What it means</th></tr>
+  <tr><td>PM2.5, PM10, PM1</td><td>Fine particles, in µg/m³. PM2.5 is the one health guidance is written around.</td></tr>
+  <tr><td>CO₂</td><td>Carbon dioxide, in ppm. Chiefly a measure of how well a room is ventilated.</td></tr>
+  <tr><td>Temperature, Humidity</td><td>Comfort, not health. These only ever tint a card.</td></tr>
+  <tr><td>VOC index, NOx index</td><td>Sensirion <em>indices</em>, not concentrations — see below.</td></tr>
+</table>
+
+<h3>The colours</h3>
+<p>PM2.5 and PM10 use the US EPA's air-quality breakpoints, revised in 2024 — so
+"Good" for PM2.5 ends at <strong>9.0 µg/m³</strong>, not the older 12.0.</p>
+
+<table>
+  <tr><th>Rating</th><th>PM2.5 µg/m³</th><th>CO₂ ppm</th></tr>
+  <tr><td><span class="swatch" style="background:var(--good)"></span>Good</td><td>0 – 9.0</td><td>under 800</td></tr>
+  <tr><td><span class="swatch" style="background:var(--moderate)"></span>Moderate</td><td>9.1 – 35.4</td><td>800 – 1000</td></tr>
+  <tr><td><span class="swatch" style="background:var(--sensitive)"></span>Sensitive</td><td>35.5 – 55.4</td><td>1000 – 1500</td></tr>
+  <tr><td><span class="swatch" style="background:var(--unhealthy)"></span>Unhealthy and above</td><td>55.5 +</td><td>1500 +</td></tr>
+</table>
+
+<h3>VOC and NOx are relative</h3>
+<p>These are Sensirion index values, where <strong>100 means "typical for this room
+over the past day."</strong> They are not concentrations, and they have no
+absolute meaning. A steady 100 is normal. Cooking, cleaning products, hairspray
+or a new piece of furniture can send the VOC index to 300 or beyond for an hour
+and then settle back. Treat the shape of the line, not the number, as the
+information.</p>
+
+<h3>A missing reading shows "—", never zero</h3>
+<p>Different models carry different sensors, and a sensor that hasn't warmed up
+reports nothing at all. Where there is no reading you will see a dash. A zero
+means the monitor genuinely measured zero, which is common and correct for
+particle counts in clean air.</p>
+
+<h2>History</h2>
+
+<p>The monitors keep no history of their own — they report only what they are
+measuring right now. So where the chart's data comes from depends on the source,
+and the two behave differently on purpose.</p>
+
+<table>
+  <tr><th></th><th>Local monitor</th><th>Cloud monitor</th></tr>
+  <tr><td>Recorded by</td><td>this app, while it is open</td><td>AirGradient, continuously</td></tr>
+  <tr><td>Resolution</td><td>about one sample a minute</td><td>five-minute buckets</td></tr>
+  <tr><td>Gaps</td><td>yes — whenever the app was closed</td><td>none, unless the monitor was offline</td></tr>
+  <tr><td>Kept for</td><td>up to a year on this device</td><td>the past week, refetched</td></tr>
+</table>
+
+<p><strong>Gaps in a local monitor's chart are real, and the line breaks to show
+them.</strong> The app records only while it is open and in the foreground, so
+closing it leaves a genuine hole. The chart shows a break rather than drawing a
+straight line across, which would invent a trend nobody measured.</p>
+
+<p>Local history keeps full minute-by-minute detail for two days, then averages
+into hourly points, so a monitor left running builds up a year of trend without
+the storage growing without bound.</p>
+
+<h2>Cloud monitors</h2>
+
+<ol>
+  <li>In the AirGradient dashboard, open the hamburger menu →
+      <em>Place</em> → <em>Connectivity Settings</em> and enable API access to get a token.</li>
+  <li>In Aetherfield, tap the gear, then <strong>Paste</strong> beside the API token
+      field. The footer confirms the token is set and how long it is.</li>
+  <li>Tap <strong>+</strong>. Your locations now appear under AirGradient cloud.</li>
+</ol>
+
+<p>Cloud readings are aggregated in five-minute buckets upstream, so a cloud
+monitor always lags one on your own network, however often the app refreshes.
+If you have both for the same device, the two will read slightly differently —
+that is the difference between the sources, not an error.</p>
+
+<h2>Settings</h2>
+
+<table>
+  <tr><th>Setting</th><th>What it does</th></tr>
+  <tr><td>Fahrenheit</td><td>Displays temperature in °F. Ratings are always judged in Celsius underneath.</td></tr>
+  <tr><td>Corrected values</td><td>Prefers AirGradient's corrected PM2.5, temperature and humidity where the monitor reports them. On by default.</td></tr>
+  <tr><td>Refresh every</td><td>How often to poll while the app is open. The monitors sample about every two seconds; anything faster than 5 s is wasted effort.</td></tr>
+  <tr><td>API token</td><td>Optional, for cloud monitors only. Stored on this device.</td></tr>
+</table>
+
+<p>Under <strong>Monitors</strong> you can drag to reorder the dashboard, and swipe to
+remove. Removing a monitor also discards the history recorded for it.</p>
+
+<h2>Leaving it running as a display</h2>
+
+<p>An iPad on a shelf makes a good permanent air-quality display. Three settings help:</p>
+<ul>
+  <li><em>Display &amp; Brightness → Auto-Lock → Never</em></li>
+  <li><em>Accessibility → Guided Access</em>, then triple-click the side button inside the app, so it can't be swiped away</li>
+  <li>Keep it on a charger</li>
+</ul>
+<p>Consider slowing <em>Refresh every</em> as well — a display that never sleeps has no
+need to poll every ten seconds.</p>
+
+<h2>If something isn't working</h2>
+
+<h3>No monitors found</h3>
+<ul>
+  <li>Check the local network permission, as above. This is by far the most common cause.</li>
+  <li>Confirm the monitor and the device are on the same Wi-Fi network — not a guest network, and not one device on 5 GHz behind client isolation.</li>
+  <li>Try adding it by IP address instead; that skips discovery entirely.</li>
+</ul>
+
+<h3>A monitor stops updating</h3>
+<p>The tile keeps the last reading and shows when it arrived, so a stale number is
+never mistaken for a live one. Check the monitor has power and Wi-Fi. Weak signal
+— worse than about −70 dBm, shown under Device — makes requests time out
+intermittently.</p>
+
+<h3>The cloud says the token was rejected</h3>
+<p>Make sure it is a long-term token and that API access is enabled for that place
+in the AirGradient dashboard.</p>
+
+<h2 id="privacy">Privacy</h2>
+
+<p><strong>Aetherfield collects nothing.</strong> There is no account, no analytics, no
+tracking, no advertising identifier, and no server belonging to this app.</p>
+
+<ul>
+  <li>Air-quality readings and recorded history stay <strong>on your device</strong>.</li>
+  <li>Local monitors are contacted <strong>directly over your own network</strong>. That traffic never leaves your home.</li>
+  <li>If you add an AirGradient cloud account, the app contacts
+      <code>api.airgradient.com</code> using the token you supply, to fetch readings
+      for your own locations. That is a request to AirGradient, under their privacy
+      policy; nothing is sent anywhere else.</li>
+  <li>Your API token is stored on your device and is sent only to AirGradient.</li>
+  <li>Removing a monitor deletes its recorded history. Deleting the app deletes everything.</li>
+</ul>
+
+<footer>
+  <p>Aetherfield is an independent app and is not affiliated with AirGradient.
+  AirGradient is a trademark of its respective owner.</p>
+</footer>
+
+</body>
+</html>
