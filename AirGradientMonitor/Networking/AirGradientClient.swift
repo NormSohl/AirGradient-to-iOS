@@ -13,7 +13,9 @@ enum AirGradientError: LocalizedError {
         case .http(let code):
             switch code {
             case 401, 403: "The cloud rejected the API token."
-            case 404: "The monitor answered, but not with measurements — check the firmware version (3.0.10+ serves /measures/current)."
+            // 404 means two different things depending on which surface
+            // answered, and the local one is the case a person can act on.
+            case 404: "Not found. From a monitor on your network this usually means older firmware — 3.0.10+ is what serves /measures/current."
             default: "The monitor answered with HTTP \(code)."
             }
         case .noCloudToken: "No AirGradient API token set. Add one in Settings."

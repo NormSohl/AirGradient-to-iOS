@@ -34,9 +34,10 @@ Confirmed against a real AirGradient monitor on the LAN: Bonjour discovery, the
 local-network permission prompt, `/measures/current`, the lenient `Reading`
 decode and the AQI banding all worked first try.
 
-Still unexercised: the entire cloud path, and long-run `HistoryStore` behaviour
-(the retention tiers are covered by the harness described under *Testing
-notes*, not by a year of actual running).
+The cloud path is exercised too, against a real account: locations list, current
+readings, and `measures/past` history all work. Nothing in the app is now
+unrun — what remains untested is long-run `HistoryStore` behaviour, covered by
+the harness under *Testing notes* rather than by a year of actual running.
 
 ```sh
 xcodebuild -scheme AirGradientMonitor \
@@ -114,9 +115,27 @@ an `actor` specifically so that one fetch is shared and cached (60 s) across all
 cloud monitors — polling five of them must not be five round trips, and without
 serialised access five concurrent refreshes would each miss the cache and fire.
 
-The cloud path has **never been exercised** — the network where this was written
-blocks `api.airgradient.com`. It is written from published docs. The local path
-is the one the app is built around.
+**Verified against a live account, not inferred.** Two things the docs did not
+make obvious, both of which cost time:
+
+- The token is a **query parameter and nothing else**. Sending it as a Bearer
+  header returns `422 {"param":"token","msg":"Invalid value"}`.
+- The cloud spells corrected measurements `pm02_corrected` / `atmp_corrected` /
+  `rhum_corrected`, where the local server says `…Compensated`. `Reading` reads
+  both. It also sends `pm003Count` in the same camelCase the local server uses —
+  an earlier guess of `pm003_count` here was simply wrong.
+
+`GET /locations/{id}/measures/past?from=…&to=…` returns 5-minute buckets with
+exactly the field names `measures/current` uses, so `Reading` decodes history
+unchanged. **The dates are ISO 8601 *basic* format** — `20260821T000000Z`, no
+dashes or colons; the extended format 404s. Do not try to discover these paths by
+probing: the auth middleware answers before routing, so a wrong path with a bad
+token returns 401, not 404. The spec at
+`https://api.airgradient.com/public/docs/api/v1/swagger.json` is the authority.
+
+The cloud also returns `pm01_corrected`, `pm10_corrected` and `rco2_corrected`,
+which have no local equivalent and are deliberately unused: adopting them would
+make cloud and local monitors report different numbers for the same metric.
 
 ## Files
 
@@ -168,7 +187,22 @@ AirGradientMonitor/
 - **Polling runs only while the app is foregrounded** (`scenePhase` in
   `AirGradientMonitorApp`), and `stopPolling()` is what flushes the history to
   disk. A background poll would be refused once suspended anyway.
-- **History is app-recorded, ~1 sample/minute, and ages in tiers.** The monitors
+- **History comes from the monitor's own source.** Local monitors are recorded
+  by this app and have real gaps; cloud monitors are drawn from AirGradient's
+  continuous record, fetched wholesale by `HistoryStore.replace(_:for:)` and
+  refetched at most every 10 minutes. A cloud monitor deliberately does **not**
+  accumulate app-observed samples — mixing them would sprinkle app-timed points
+  through a fetched series at slightly different timestamps.
+- **Anything judging sample spacing must ask the source.** Local samples are a
+  minute apart, cloud buckets five. `HistorySection.expectedSpacing` exists
+  because the gap rule, written for local cadence, broke every cloud point into
+  its own segment.
+- **Band colouring folds away short runs by *sample count*, never by a fraction
+  of the visible span.** Scaled to the span, a week-wide chart swallowed every
+  excursion under ~2.6 h — which is precisely the sharp, tall spikes worth
+  seeing — and painted them the colour of the calm either side.
+- **History is app-recorded for local monitors, ~1 sample/minute, and ages in
+  tiers.** The monitors
   keep none of their own — `/measures/current` is exactly what it says. So the
   chart has real gaps whenever the app was closed, and the empty state says so
   outright rather than looking broken. Don't "fix" the gaps.
@@ -255,7 +289,7 @@ installs a monitor backed by them, with two days of history already recorded.
 
 ## Not built, deliberately
 
-Home-screen widgets, Live Activities, notification thresholds, and the cloud's
-historical `measures/past` endpoint. Each is a real feature; none is needed to
-answer "what is the air like right now", and the last needs an account to even
-test against.
+Home-screen widgets, Live Activities, and notification thresholds. Each is a
+real feature; none is needed to answer "what is the air like right now".
+
+`measures/past` **is** built now — see *The APIs it speaks*.
