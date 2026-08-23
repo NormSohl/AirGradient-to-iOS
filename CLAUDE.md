@@ -60,8 +60,8 @@ turning it on will surface a batch of actor-isolation warnings that are
 deliberately unaddressed.
 
 `DEVELOPMENT_TEAM` (342G7AUKSH) and `PRODUCT_BUNDLE_IDENTIFIER`
-(`com.sohl.AirGradientMonitor`) are now set for real; the `com.example`
-placeholder is gone.
+(`com.sohl.aetherfield`) are set for real. The app is named **Aetherfield**;
+the target and scheme are still `AirGradientMonitor`, which no user ever sees.
 
 Deploying to a *new* device needs it registered with the developer account
 first. `xcodebuild -allowProvisioningUpdates` does not reliably do this from the
@@ -141,11 +141,14 @@ make cloud and local monitors report different numbers for the same metric.
 
 ```
 AirGradientMonitor/
-  Models/       Reading (decodes both API shapes), Metric + AQI banding, Monitor, Settings
+  Models/       Reading (decodes both API shapes), Metric + AQI banding, Monitor, Settings,
+                SeriesShaping (gap + band-run logic, kept testable), DemoSource
   Networking/   AirGradientClient (actor), MonitorDiscovery (Bonjour via NWBrowser)
   Store/        MonitorsModel (@Observable state + polling loop), HistoryStore (on-disk samples)
   Views/        DashboardView (split view + tiles), MonitorDetailView, HistorySection,
                 AddMonitorView, SettingsView, CardBackground
+Tests/          run.sh + main.swift + Fixtures/ (real API responses)
+docs/           manual.html (also the privacy policy), app-store-listing.md
 ```
 
 ## Load-bearing decisions
@@ -256,6 +259,22 @@ plist without moving those.
   exercised without a device on the desk.
 - With no monitor to hand, `AirGradientClient` takes an injected `URLSession`,
   which is the seam for a stubbed protocol.
+- **There is a test suite: `./Tests/run.sh`.** It compiles the model layer for
+  macOS and runs assertions — no simulator, no scheme, no XCTest target (the
+  project uses file-system-synchronized groups, and hand-editing the pbxproj to
+  add one is a worse risk than this is a limitation). Run it before committing
+  anything in `Models/`, `Store/` or `Networking/`.
+- **The fixtures are real API responses, not invented ones.** `world-current.json`
+  is 250 public monitors from AirGradient's open `world/locations/measures/current`
+  endpoint (no token needed), carrying 82 distinct null patterns, mixed int/float
+  types, and fields this app does not model. `cloud-past.json` and
+  `local-current.json` are real too, with anything locating a home stripped.
+  Every decode bug found so far came from a real payload disagreeing with the
+  docs; no synthetic fixture would have contained them.
+- **Both bugs that shipped today are covered.** Reverting the `_corrected`
+  decoding fails four checks; restoring the span-fraction run folding fails
+  "a 1-hour spike in a week keeps its colour". A test that does not fail when
+  the bug returns is decoration.
 - **Retention logic is testable without waiting a year.** Compile `Reading.swift`
   and `HistoryStore.swift` together with a small `@main` harness for macOS
   (`xcrun swiftc -O -o t Reading.swift HistoryStore.swift t.swift`) and feed it
