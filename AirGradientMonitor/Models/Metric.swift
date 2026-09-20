@@ -48,12 +48,13 @@ enum QualityBand: Int, Comparable, CaseIterable {
 /// One displayable quantity: how to pull it out of a `Reading`, how to format
 /// it, and how to judge it.
 enum Metric: String, CaseIterable, Identifiable {
-    case pm25, pm10, pm01, co2, temperature, humidity, tvoc, nox
+    case aqi, pm25, pm10, pm01, co2, temperature, humidity, tvoc, nox
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .aqi: "AQI"
         case .pm25: "PM2.5"
         case .pm10: "PM10"
         case .pm01: "PM1"
@@ -67,6 +68,7 @@ enum Metric: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .aqi: "gauge.medium"
         case .pm25, .pm10, .pm01: "aqi.medium"
         case .co2: "carbon.dioxide.cloud"
         case .temperature: "thermometer.medium"
@@ -80,6 +82,7 @@ enum Metric: String, CaseIterable, Identifiable {
     /// setting, so it is resolved by the caller through `unit(for:)`.
     func unit(fahrenheit: Bool) -> String {
         switch self {
+        case .aqi: ""
         case .pm25, .pm10, .pm01: "µg/m³"
         case .co2: "ppm"
         case .temperature: fahrenheit ? "°F" : "°C"
@@ -95,6 +98,11 @@ enum Metric: String, CaseIterable, Identifiable {
     /// than showing nothing, because older firmware sends only the raw field.
     func value(from r: Reading, settings: Settings) -> Double? {
         switch self {
+        case .aqi:
+            return AQI.overall(
+                pm25: Metric.pm25.value(from: r, settings: settings),
+                pm10: Metric.pm10.value(from: r, settings: settings)
+            )
         case .pm25:
             let v = settings.useCompensated ? (r.pm02Compensated ?? r.pm02) : r.pm02
             return v
@@ -112,6 +120,7 @@ enum Metric: String, CaseIterable, Identifiable {
 
     func format(_ v: Double) -> String {
         switch self {
+        case .aqi: String(format: "%.0f", v)
         case .pm25, .pm10, .pm01: v < 10 ? String(format: "%.1f", v) : String(format: "%.0f", v)
         case .co2, .tvoc, .nox: String(format: "%.0f", v)
         case .temperature: String(format: "%.1f", v)
@@ -123,6 +132,7 @@ enum Metric: String, CaseIterable, Identifiable {
     /// before it can be judged — otherwise 72 °F reads as a fever.
     func band(_ value: Double, fahrenheit: Bool = false) -> QualityBand {
         switch self {
+        case .aqi: return AQI.band(aqi: value)
         case .pm25: return AQI.band(pm25: value)
         case .pm10: return AQI.band(pm10: value)
         case .pm01: return AQI.band(pm25: value) // no EPA scale for PM1; PM2.5's is the closest honest proxy
@@ -194,6 +204,17 @@ enum AQI {
 
     static func band(pm25: Double) -> QualityBand { band(aqi: aqi(pm25: pm25)) }
     static func band(pm10: Double) -> QualityBand { band(aqi: aqi(pm10: pm10)) }
+
+    /// The AQI actually reported by AirNow et al.: the worst of the sub-indices
+    /// for whichever pollutants are being measured, not an average of them —
+    /// one bad pollutant is what you breathe, not diluted by a clean one.
+    /// Either input may be missing (Open Air's PM10 warms up separately from
+    /// its PM2.5, and older firmware may send neither), so this is `nil` only
+    /// when both are.
+    static func overall(pm25: Double?, pm10: Double?) -> Double? {
+        let subindices = [pm25.map(aqi(pm25:)), pm10.map(aqi(pm10:))].compactMap { $0 }
+        return subindices.max()
+    }
 
     /// Indoor CO2 bands, matching how AirGradient's own LED bar is documented:
     /// outdoor air is ~420 ppm, 1000 is the classic ventilation threshold, and

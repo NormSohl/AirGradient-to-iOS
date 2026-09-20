@@ -149,6 +149,23 @@ do {
     var f = settings; f.fahrenheit = true
     check(Metric.temperature.band(72, fahrenheit: true) == Metric.temperature.band(22.2, fahrenheit: false),
           "72F and 22.2C band the same")
+
+    // Overall AQI is the worse of the PM2.5 and PM10 sub-indices, not their
+    // average or the first one that happens to be present.
+    check(AQI.overall(pm25: 9.0, pm10: 54) == AQI.aqi(pm25: 9.0), "PM2.5 and PM10 agree at 50")
+    check(AQI.overall(pm25: 9.0, pm10: 154) == AQI.aqi(pm10: 154), "worse PM10 sub-index wins")
+    check(AQI.overall(pm25: 35.4, pm10: 55) == AQI.aqi(pm25: 35.4), "worse PM2.5 sub-index wins")
+    check(AQI.overall(pm25: 9.0, pm10: nil) == AQI.aqi(pm25: 9.0), "falls back to PM2.5 alone")
+    check(AQI.overall(pm25: nil, pm10: 54) == AQI.aqi(pm10: 54), "falls back to PM10 alone")
+    check(AQI.overall(pm25: nil, pm10: nil) == nil, "nil only when both inputs are nil")
+
+    var r = Reading()
+    r.pm02 = 9.0
+    r.pm10 = 154
+    check(Metric.aqi.value(from: r, settings: settings) == AQI.aqi(pm10: 154),
+          "Metric.aqi reads both PM fields off a Reading")
+    check(Metric.aqi.band(Metric.aqi.value(from: r, settings: settings)!) == .moderate,
+          "the combined AQI value bands like any other AQI number")
 }
 
 // MARK: - Series shaping
