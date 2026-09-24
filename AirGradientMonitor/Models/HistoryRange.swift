@@ -30,13 +30,6 @@ enum HistoryRange: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Ranges a source actually has data for. Cloud history is fetched a week
-    /// at a time, so offering a year there would draw a sliver at the right
-    /// edge of an empty chart and look broken.
-    static func available(cloud: Bool) -> [HistoryRange] {
-        cloud ? [.day, .week] : allCases
-    }
-
     /// Tick interval, aligned to calendar boundaries. `compact` is the phone
     /// width, where the day and year layouts halve their label count to fit.
     func axisStride(compact: Bool) -> (component: Calendar.Component, count: Int) {

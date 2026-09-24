@@ -143,6 +143,11 @@ probing: the auth middleware answers before routing, so a wrong path with a bad
 token returns 401, not 404. The spec at
 `https://api.airgradient.com/public/docs/api/v1/swagger.json` is the authority.
 
+`measures/past` refuses a `from … to` wider than **10 days** (422), and answers
+404 "No data available" for a span with nothing in it — which the client turns
+into an empty slice, not an error. See `CloudHistoryPlan` for how a year is
+fetched within that limit.
+
 The cloud also returns `pm01_corrected`, `pm10_corrected` and `rco2_corrected`,
 which have no local equivalent and are deliberately unused: adopting them would
 make cloud and local monitors report different numbers for the same metric.
@@ -152,7 +157,8 @@ make cloud and local monitors report different numbers for the same metric.
 ```
 AirGradientMonitor/
   Models/       Reading (decodes both API shapes), Metric + AQI banding, Monitor, Settings,
-                SeriesShaping (gap + band-run logic, kept testable), HistoryRange, DemoSource
+                SeriesShaping (gap + band-run logic, kept testable), HistoryRange,
+                CloudHistoryPlan (which slices of cloud history to fetch), DemoSource
   Networking/   AirGradientClient (actor), MonitorDiscovery (Bonjour via NWBrowser)
   Store/        MonitorsModel (@Observable state + polling loop), HistoryStore (on-disk samples)
   Views/        DashboardView (split view + tiles), MonitorDetailView, HistorySection,
@@ -202,10 +208,24 @@ docs/           manual.html (also the privacy policy), app-store-listing.md
   disk. A background poll would be refused once suspended anyway.
 - **History comes from the monitor's own source.** Local monitors are recorded
   by this app and have real gaps; cloud monitors are drawn from AirGradient's
-  continuous record, fetched wholesale by `HistoryStore.replace(_:for:)` and
-  refetched at most every 10 minutes. A cloud monitor deliberately does **not**
+  continuous record. A cloud monitor deliberately does **not**
   accumulate app-observed samples — mixing them would sprinkle app-timed points
   through a fetched series at slightly different timestamps.
+- **Cloud history is caught up, then backfilled, a slice at a time.** Every 10
+  minutes the app fetches from an hour before the newest stored point to now;
+  once, it walks backwards in 9-day slices (under the API's 10-day cap) to a
+  year, or until three empty slices say the monitor didn't exist yet. Each
+  slice goes through `HistoryStore.merge`, which replaces exactly its own span
+  — half-open and on the hour, so an hourly average is replaced whole or not at
+  all, never averaged together with fresh buckets for the same hour. This runs
+  in its own task, so tiles never wait on it.
+- **Backfill resumes from the oldest *stored* point, never a saved position.**
+  History reaches disk up to 5 minutes after it's fetched; a saved position
+  could outlive a crash the samples didn't, leaving a hole nothing refetches.
+  The only thing persisted is `cloudBackfillDone.v1`, and only after a
+  synchronous flush. Verified on a simulator against a stubbed cloud: 17
+  requests on first launch (one catch-up, 13 with data, 3 empty), one on the
+  next.
 - **Anything judging sample spacing must ask the source.** Local samples are a
   minute apart, cloud buckets five. `HistorySection.expectedSpacing` exists
   because the gap rule, written for local cadence, broke every cloud point into
@@ -221,8 +241,6 @@ docs/           manual.html (also the privacy policy), app-store-listing.md
   drew thirty cramped, clipped slots. The band gradient's stops stay relative
   to the *data* span — Swift Charts maps a mark's gradient over the mark, not
   the plot, which was checked on a simulator with data covering 60 of 365 days.
-  Cloud monitors are offered Day and Week only, since a week is all that is
-  fetched.
 - **History is app-recorded for local monitors, ~1 sample/minute, and ages in
   tiers.** The monitors
   keep none of their own — `/measures/current` is exactly what it says. So the

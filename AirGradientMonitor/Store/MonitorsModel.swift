@@ -94,6 +94,8 @@ final class MonitorsModel {
         latest[monitor.id] = nil
         status[monitor.id] = nil
         history.forget(monitor.id)
+        cancelCloudHistory(monitor.id)
+        setCloudBackfillDone(false, for: monitor.id)
         persistMonitors()
     }
 
@@ -129,6 +131,9 @@ final class MonitorsModel {
         isRunning = false
         loop?.cancel()
         loop = nil
+        // Backfill resumes from its saved floor on the next start; a request
+        // left running would be refused once the app is suspended anyway.
+        for id in cloudHistoryTasks.keys { cancelCloudHistory(id) }
         history.flush()
     }
 
@@ -184,7 +189,7 @@ final class MonitorsModel {
             // app-timed points through a fetched series at slightly different
             // timestamps.
             if case .cloud(let locationId) = monitor.source {
-                await refreshCloudHistory(id: id, locationId: locationId)
+                refreshCloudHistory(id: id, locationId: locationId)
             } else if history.record(reading, for: id) {
                 historyVersion &+= 1
             }
@@ -196,37 +201,101 @@ final class MonitorsModel {
         }
     }
 
-    /// How long a fetched cloud series is reused before asking again. The
-    /// buckets are five minutes wide, so refetching faster only re-downloads
-    /// the same numbers.
+    /// How often a cloud monitor's history is brought up to date. The buckets
+    /// are five minutes wide, so asking faster only re-downloads the same
+    /// numbers.
     private let cloudHistoryTTL: TimeInterval = 600
     private var cloudHistoryFetched: [UUID: Date] = [:]
+    /// One sync per monitor at a time. Backfill can be dozens of requests, and
+    /// runs apart from `refresh` so the tiles never wait on it.
+    /// Tokened so a cancelled task finishing late can't clear the slot of the
+    /// one that replaced it — which would let a duplicate sync start.
+    private var cloudHistoryTasks: [UUID: (token: UUID, task: Task<Void, Never>)] = [:]
 
-    /// A week of 5-minute buckets is ~2,000 samples — enough to see a week's
-    /// pattern, small enough to hold and redraw.
-    private let cloudHistoryWindow: TimeInterval = 7 * 24 * 3600
-
-    private func refreshCloudHistory(id: UUID, locationId: Int) async {
+    private func refreshCloudHistory(id: UUID, locationId: Int) {
+        guard cloudHistoryTasks[id] == nil else { return }
         if let last = cloudHistoryFetched[id], Date().timeIntervalSince(last) < cloudHistoryTTL { return }
         cloudHistoryFetched[id] = Date()
-        let now = Date()
-        do {
-            let past = try await AirGradientClient.shared.cloudHistory(
-                locationId: locationId,
-                from: now.addingTimeInterval(-cloudHistoryWindow),
-                to: now,
-                token: settings.cloudToken
-            )
-            guard !past.isEmpty, monitors.contains(where: { $0.id == id }) else { return }
-            history.replace(past, for: id)
-            history.flush()
-            historyVersion &+= 1
-        } catch {
-            // A failed history fetch must not mark the monitor unreachable:
-            // the current reading already arrived, and that is what the tiles
-            // show. The chart simply keeps whatever it had.
-            cloudHistoryFetched[id] = nil
+        let token = UUID()
+        let task = Task { [weak self] in
+            await self?.syncCloudHistory(id: id, locationId: locationId)
+            if self?.cloudHistoryTasks[id]?.token == token { self?.cloudHistoryTasks[id] = nil }
         }
+        cloudHistoryTasks[id] = (token, task)
+    }
+
+    /// Catches up to now, then backfills towards a year. See `CloudHistoryPlan`.
+    private func syncCloudHistory(id: UUID, locationId: Int) async {
+        let now = Date()
+        let newest = history.history(for: id).last?.timestamp
+        let recent = CloudHistoryPlan.catchUp(newest: newest, now: now)
+        for slice in recent {
+            guard await fetchCloudSlice(slice, id: id, locationId: locationId) != nil else {
+                // A failed history fetch must not mark the monitor unreachable:
+                // the current reading already arrived, and that is what the
+                // tiles show. The chart keeps whatever it had, and the next
+                // refresh tries again rather than waiting out the TTL.
+                cloudHistoryFetched[id] = nil
+                return
+            }
+        }
+
+        guard !cloudBackfillDone(id) else { return }
+
+        // Resume from the oldest point actually held, not from a saved
+        // position: history reaches disk up to five minutes after it is
+        // fetched, so a saved position can outlive a crash that the samples
+        // didn't, and the hole behind it would never be refetched.
+        var floor = history.history(for: id).first.map { CloudHistoryPlan.hourStart($0.timestamp) }
+            ?? recent.first?.start ?? now
+        var emptyRun = 0
+        while let slice = CloudHistoryPlan.backfill(floor: floor, now: now) {
+            // Politeness, not correctness: a year is ~40 requests, and nothing
+            // is gained by sending them back to back.
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled,
+                  let count = await fetchCloudSlice(slice, id: id, locationId: locationId) else { return }
+            floor = slice.start
+            emptyRun = count == 0 ? emptyRun + 1 : 0
+            if emptyRun >= CloudHistoryPlan.emptyChunksToStop { break }
+        }
+        // Done only once it is on disk — the same crash, the other way round.
+        history.flush()
+        setCloudBackfillDone(true, for: id)
+    }
+
+    /// Fetches and stores one slice. Returns how many buckets it held, or nil
+    /// if the fetch failed or the monitor was removed meanwhile.
+    private func fetchCloudSlice(_ slice: DateInterval, id: UUID, locationId: Int) async -> Int? {
+        guard let past = try? await AirGradientClient.shared.cloudHistory(
+            locationId: locationId, from: slice.start, to: slice.end, token: settings.cloudToken
+        ), !Task.isCancelled, monitors.contains(where: { $0.id == id }) else { return nil }
+        history.merge(past, covering: slice, for: id)
+        historyVersion &+= 1
+        return past.count
+    }
+
+    // MARK: - Cloud backfill progress
+
+    /// Cloud monitors whose backfill has finished — reached a year, or found
+    /// the monitor hadn't existed that long. Without this, every launch would
+    /// re-ask for the empty weeks before a monitor was set up.
+    private let backfillDoneKey = "cloudBackfillDone.v1"
+
+    private func cloudBackfillDone(_ id: UUID) -> Bool {
+        (defaults.stringArray(forKey: backfillDoneKey) ?? []).contains(id.uuidString)
+    }
+
+    private func setCloudBackfillDone(_ done: Bool, for id: UUID) {
+        var ids = Set(defaults.stringArray(forKey: backfillDoneKey) ?? [])
+        if done { ids.insert(id.uuidString) } else { ids.remove(id.uuidString) }
+        defaults.set(ids.sorted(), forKey: backfillDoneKey)
+    }
+
+    private func cancelCloudHistory(_ id: UUID) {
+        cloudHistoryTasks[id]?.task.cancel()
+        cloudHistoryTasks[id] = nil
+        cloudHistoryFetched[id] = nil
     }
 
     /// Serial/model/firmware arrive with the readings; keep them on the monitor

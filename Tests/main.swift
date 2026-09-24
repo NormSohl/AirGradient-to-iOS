@@ -266,10 +266,83 @@ do {
         }
     }
 
-    check(HistoryRange.available(cloud: true) == [.day, .week],
-          "cloud monitors are only offered the week they have")
-    check(HistoryRange.available(cloud: false) == HistoryRange.allCases, "local monitors get every range")
     check(HistoryRange.year.duration >= 365 * 24 * 3600, "Year reaches back as far as retention keeps")
+}
+
+// MARK: - Cloud history
+
+section("CloudHistoryPlan")
+do {
+    let now = Date(timeIntervalSinceReferenceDate: 811_000_000 + 1234)   // deliberately mid-hour
+    let apiLimit: TimeInterval = 10 * 24 * 3600
+    let earliest = CloudHistoryPlan.hourStart(now.addingTimeInterval(-CloudHistoryPlan.reach))
+    func onHour(_ d: Date) -> Bool { d.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 3600) == 0 }
+    func contiguous(_ s: [DateInterval]) -> Bool { zip(s, s.dropFirst()).allSatisfy { $0.end == $1.start } }
+
+    let fresh = CloudHistoryPlan.catchUp(newest: nil, now: now)
+    check(fresh.count == 1 && onHour(fresh[0].start) && fresh[0].end == now,
+          "nothing stored: one slice, on the hour, up to now")
+
+    let newest = now.addingTimeInterval(-20 * 60)
+    let steady = CloudHistoryPlan.catchUp(newest: newest, now: now)
+    check(steady.count == 1 && steady[0].start == CloudHistoryPlan.hourStart(newest).addingTimeInterval(-3600),
+          "caught up: refetch from an hour before the newest point", "\(steady)")
+    check(steady[0].duration <= 3 * 3600, "caught up: a refresh is a couple of hours, not a week",
+          "\(steady[0].duration / 3600) h")
+
+    // Away for 25 days: the hole is filled going forward, in legal slices.
+    let away = CloudHistoryPlan.catchUp(newest: now.addingTimeInterval(-25 * 24 * 3600), now: now)
+    check(away.count == 3 && contiguous(away) && away.last?.end == now,
+          "after an absence: contiguous slices up to now", "\(away.count) slices")
+    check(away.allSatisfy { $0.duration <= apiLimit }, "no slice exceeds the API's 10-day limit")
+
+    let ancient = CloudHistoryPlan.catchUp(newest: now.addingTimeInterval(-800 * 24 * 3600), now: now)
+    check(ancient.first?.start == earliest, "catch-up never reaches past a year")
+
+    // Walk a whole backfill.
+    var floor = fresh[0].start
+    var walked: [DateInterval] = []
+    while let slice = CloudHistoryPlan.backfill(floor: floor, now: now), walked.count < 100 {
+        walked.append(slice)
+        floor = slice.start
+    }
+    check(walked.count <= 42, "a year of backfill is ~40 requests", "\(walked.count)")
+    check(zip(walked, walked.dropFirst()).allSatisfy { $0.start == $1.end }, "backfill slices are contiguous")
+    check(walked.allSatisfy { $0.duration <= apiLimit && $0.duration > 0 }, "backfill slices are legal widths")
+    check(walked.allSatisfy { onHour($0.start) && onHour($0.end) }, "backfill boundaries fall on the hour")
+    check(floor == earliest, "backfill stops at exactly a year")
+    check(CloudHistoryPlan.backfill(floor: .distantPast, now: now) == nil, "a finished backfill stays finished")
+}
+
+section("HistoryStore.merge")
+MainActor.assumeIsolated {
+    let store = HistoryStore()
+    let id = UUID()
+    defer { store.forget(id) }
+    let now = Date()
+    let base = CloudHistoryPlan.hourStart(now.addingTimeInterval(-10 * 24 * 3600))
+
+    // Ten days back is past the 48 h fine window, so this is stored hourly.
+    func reading(_ t: Date, _ pm: Double) -> Reading { var r = Reading(timestamp: t); r.pm02 = pm; return r }
+    let hourly = (0..<6).map { reading(base.addingTimeInterval(Double($0) * 3600), 100) }
+    store.merge(hourly, covering: DateInterval(start: base, duration: 6 * 3600), for: id)
+    check(store.history(for: id).count == 6, "hourly history stored as-is")
+
+    // Re-fetch hours 2 and 3 as 5-minute buckets with a different value.
+    let span = DateInterval(start: base.addingTimeInterval(2 * 3600), duration: 2 * 3600)
+    let buckets = stride(from: 0.0, to: span.duration, by: 300).map { reading(span.start.addingTimeInterval($0), 5) }
+    store.merge(buckets, covering: span, for: id)
+    let after = store.history(for: id)
+    let values = after.map { $0.pm02 ?? -1 }
+    check(values == [100, 100, 5, 5, 100, 100],
+          "a fetched hour replaces the stored average instead of averaging into it", "\(values)")
+    check(Set(after.map(\.timestamp)).count == after.count, "no hour appears twice")
+
+    // Merging recent buckets leaves old history alone.
+    let recent = DateInterval(start: CloudHistoryPlan.hourStart(now.addingTimeInterval(-3600)), end: now)
+    store.merge([reading(recent.start, 7)], covering: recent, for: id)
+    check(store.history(for: id).count == 7 && store.history(for: id).last?.pm02 == 7,
+          "a catch-up slice adds to the history, never replaces all of it")
 }
 
 // MARK: - Demo data

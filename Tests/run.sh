@@ -10,6 +10,7 @@ xcrun swiftc -O -o "$OUT/tests" \
   AirGradientMonitor/Models/Metric.swift \
   AirGradientMonitor/Models/SeriesShaping.swift \
   AirGradientMonitor/Models/HistoryRange.swift \
+  AirGradientMonitor/Models/CloudHistoryPlan.swift \
   AirGradientMonitor/Models/DemoSource.swift \
   AirGradientMonitor/Networking/AirGradientClient.swift \
   AirGradientMonitor/Store/HistoryStore.swift \

@@ -124,7 +124,15 @@ actor AirGradientClient {
         ]
         guard let url = comps.url else { throw AirGradientError.badURL }
 
-        let data = try await get(url)
+        // 404 is the spec's "No data available" — an offline stretch, or a
+        // range from before the monitor existed. That is an empty slice, not a
+        // failure: backfill counts empty slices to know when to stop.
+        let data: Data
+        do {
+            data = try await get(url)
+        } catch AirGradientError.http(404) {
+            return []
+        }
         return try JSONDecoder().decode([Reading].self, from: data)
             .sorted { $0.timestamp < $1.timestamp }
     }

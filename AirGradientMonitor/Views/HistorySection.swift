@@ -13,7 +13,7 @@ struct HistorySection: View {
     @Binding var metric: Metric
     /// Remembered across launches: an iPad left on a shelf showing a week
     /// should still show a week after it restarts.
-    @AppStorage("historyRange") private var storedRange: HistoryRange = .day
+    @AppStorage("historyRange") private var range: HistoryRange = .day
 
     private struct Point: Identifiable {
         let id = UUID()
@@ -29,14 +29,6 @@ struct HistorySection: View {
     private var isCloud: Bool {
         if case .cloud = monitor.source { return true }
         return false
-    }
-
-    private var availableRanges: [HistoryRange] { HistoryRange.available(cloud: isCloud) }
-
-    /// The stored choice, unless this monitor's source can't fill it — a cloud
-    /// monitor shown after a local one left on Year falls back to its widest.
-    private var range: HistoryRange {
-        availableRanges.contains(storedRange) ? storedRange : availableRanges.last ?? .day
     }
 
     /// Points for the current metric recorded since `start`, plus whether any
@@ -111,11 +103,8 @@ struct HistorySection: View {
                 .labelsHidden()
             }
 
-            // Bound to the effective range, not the stored one: a cloud monitor
-            // shows its fallback selected without overwriting the choice a
-            // local monitor will want back.
-            Picker("Range", selection: Binding(get: { range }, set: { storedRange = $0 })) {
-                ForEach(availableRanges) { r in
+            Picker("Range", selection: $range) {
+                ForEach(HistoryRange.allCases) { r in
                     Text(r.title).tag(r)
                 }
             }
@@ -128,6 +117,8 @@ struct HistorySection: View {
             if series.count < 2 {
                 Text(anyRecorded
                      ? "Nothing recorded in the last \(range.title.lowercased()). Pick a longer range to see older history."
+                     : isCloud
+                     ? "Fetching history from AirGradient."
                      : "Recording. The monitor doesn't store history itself, so the chart fills in about a point a minute while this app is open.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

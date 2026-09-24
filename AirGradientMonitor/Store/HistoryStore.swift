@@ -88,15 +88,29 @@ final class HistoryStore {
         return true
     }
 
-    /// Replaces a monitor's whole series.
+    /// Folds a fetched slice of cloud history in, replacing whatever was stored
+    /// for exactly `span` and leaving the rest alone.
     ///
     /// For cloud monitors the history is not ours to accumulate — AirGradient
     /// already recorded it, continuously, including while this app was closed.
-    /// Fetching it wholesale and replacing is what makes a cloud monitor's
-    /// chart complete where a local one honestly has holes.
-    func replace(_ series: [Reading], for id: UUID) {
-        samples[id] = compact(series.sorted { $0.timestamp < $1.timestamp }, now: Date())
+    /// Taking it from the cloud is what makes a cloud monitor's chart complete
+    /// where a local one honestly has holes. It arrives a slice at a time
+    /// (see `CloudHistoryPlan`), so a slice must replace only its own span.
+    ///
+    /// Half-open, `start <= t < end`, with callers keeping boundaries on the
+    /// hour: an hourly average is stamped at its hour's start, so this either
+    /// replaces a whole hour or leaves it alone, never half of one.
+    func merge(_ fetched: [Reading], covering span: DateInterval, for id: UUID) {
+        func inSpan(_ r: Reading) -> Bool { r.timestamp >= span.start && r.timestamp < span.end }
+        var series = history(for: id).filter { !inSpan($0) }
+        series.append(contentsOf: fetched.filter(inSpan))
+        series.sort { $0.timestamp < $1.timestamp }
+        samples[id] = compact(series, now: Date())
         dirty.insert(id)
+        // Not `flush()`: a year of history is a few MB to encode, and this runs
+        // every ten minutes and dozens of times during a backfill. The periodic
+        // write encodes off the main actor; `stopPolling` flushes the rest.
+        flushIfStale()
     }
 
     func forget(_ id: UUID) {
