@@ -20,15 +20,18 @@ Foundation, SwiftUI, Swift Charts and Network.framework.
 
 ## Build status — READ THIS FIRST
 
-**Compiles clean and runs.** First compiled 2026-08-20, Xcode 16.2 against the
-iOS 18.2 SDK: zero errors, zero warnings. Launched on an iPad Pro 13-inch (M4)
-and an iPhone 16 Pro, both iOS 18.3.1 — the split view collapses correctly on
-the phone, with no phantom pushed screen.
+**Compiles clean and runs.** Current toolchain: **Xcode 27.0** (27A266a), iOS
+27.0 SDK — zero errors, zero warnings in the project's own code. (The one line
+the build prints, `appintentsmetadataprocessor … no AppIntents.framework
+dependency found`, is Xcode's, and expected for an app with no App Intents.)
+Runs on the iPad Pro 13-inch (M5) and iPhone 18 Pro simulators, iOS 27.0, and
+on hardware — an iPad Pro 11-inch (M4) on **iPadOS 27.0**, installed with
+`./deploy.sh`. Verified 2026-09-24.
 
-Also runs on hardware: installed and launched on an iPad Pro 11-inch (M4)
-running **iPadOS 26.6**, from Xcode 16.2. An OS that far ahead of the toolchain
-is not the problem it looks like — `devicectl` opens a CoreDevice tunnel and
-installs fine, and the device shows up as an eligible `xcodebuild` destination.
+First compiled 2026-08-20 with Xcode 16.2 against the iOS 18.2 SDK, and moved
+to Xcode 27 with no source changes. Along the way it ran on iPadOS 26.6 from
+Xcode 16.2: a device OS far ahead of the toolchain is not the problem it looks
+like — `devicectl` opens a CoreDevice tunnel and installs fine.
 
 Confirmed against a real AirGradient monitor on the LAN: Bonjour discovery, the
 local-network permission prompt, `/measures/current`, the lenient `Reading`
@@ -41,8 +44,21 @@ the harness under *Testing notes* rather than by a year of actual running.
 
 ```sh
 xcodebuild -scheme AirGradientMonitor \
-  -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)' build
+  -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M5),OS=latest' build
 ```
+
+Simulator names follow the installed runtimes, not this project: Xcode 27 ships
+no "iPad Pro 13-inch (M4)" on iOS 27, and a stale name fails with every other
+destination listed as ineligible — which reads like a signing or platform
+problem and isn't. `OS=latest` matters too, because the same name can exist on
+several runtimes. `xcodebuild -showdestinations` lists what's there.
+
+**`./deploy.sh` must be run from a normal Terminal, not from Claude Code's
+shell.** That shell is a macOS *Background* session: codesign fails with
+`errSecInternalComponent` and the keychain answers "User interaction is not
+allowed". `security unlock-keychain` can't fix it from there either, since the
+password prompt gets no input. Simulator builds and `./Tests/run.sh` are fine
+from any shell.
 
 **A matching simulator *runtime* is required, not just a matching Xcode.**
 `actool` refuses to compile `Assets.xcassets` unless an installed simulator
