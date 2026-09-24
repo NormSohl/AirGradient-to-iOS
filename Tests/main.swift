@@ -200,6 +200,22 @@ do {
           "hourly rollups are not gaps")
 }
 
+section("SeriesShaping.timeWeightedMean")
+do {
+    let h0 = Date(timeIntervalSinceReferenceDate: 800_000_000 - 800_000_000.truncatingRemainder(dividingBy: 3600))
+    // One old hour rolled up to a single point of 0, then one recent hour of
+    // minute samples at 10. Per sample that is ~9.8; per hour it is 5.
+    var pts: [(date: Date, value: Double)] = [(h0, 0)]
+    for m in 0..<60 { pts.append((h0.addingTimeInterval(3600 + Double(m) * 60), 10)) }
+    let mean = SeriesShaping.timeWeightedMean(pts)
+    check(mean == 5, "an hourly point weighs the same as an hour of minute samples", "\(mean.map { "\($0)" } ?? "nil")")
+
+    // A gap is not a zero: two recorded hours a day apart average to their mean.
+    let gapped = SeriesShaping.timeWeightedMean([(h0, 4), (h0.addingTimeInterval(24 * 3600), 8)])
+    check(gapped == 6, "unrecorded hours don't count as zero")
+    check(SeriesShaping.timeWeightedMean([]) == nil, "no samples, no average — never 0")
+}
+
 section("SeriesShaping.bandRuns")
 do {
     let t0 = Date()

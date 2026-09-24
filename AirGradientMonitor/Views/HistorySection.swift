@@ -169,9 +169,10 @@ struct HistorySection: View {
                 .frame(height: sizeClass == .regular ? 260 : 160)
 
                 if let last = series.last {
+                    let average = SeriesShaping.timeWeightedMean(series.map { ($0.date, $0.value) })
                     HStack(spacing: 6) {
                         Circle().fill(last.band.color).frame(width: 7, height: 7)
-                        Text("\(series.count) samples · now \(metric.format(last.value)) \(metric.unit(fahrenheit: model.settings.fahrenheit))")
+                        Text("\(series.count) samples · avg \(average.map(metric.format) ?? "—") · now \(metric.format(last.value)) \(metric.unit(fahrenheit: model.settings.fahrenheit))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

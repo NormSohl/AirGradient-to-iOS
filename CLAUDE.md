@@ -227,6 +227,11 @@ docs/           manual.html (also the privacy policy), app-store-listing.md
   continuous record. A cloud monitor deliberately does **not**
   accumulate app-observed samples — mixing them would sprinkle app-timed points
   through a fetched series at slightly different timestamps.
+- **The chart's average is per hour, not per sample.** History is minute
+  samples for 48 h and hourly points before that, so a plain mean over a week
+  weights the last two days ~60× the rest. `SeriesShaping.timeWeightedMean`
+  averages within each hour first; unrecorded hours don't count, as zero or
+  otherwise. It covers only the range on screen.
 - **Cloud history is caught up, then backfilled, a slice at a time.** Every 10
   minutes the app fetches from an hour before the newest stored point to now;
   once, it walks backwards in 9-day slices (under the API's 10-day cap) to a

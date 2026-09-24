@@ -57,6 +57,25 @@ enum SeriesShaping {
         return out
     }
 
+    /// Mean over *time*, not over samples: each recorded hour counts once.
+    ///
+    /// History is minute samples for the last 48 h and hourly averages before
+    /// that, so a plain mean over a week-wide window would weight the last two
+    /// days about sixty times as heavily as the five before them. Averaging
+    /// within each hour first puts every hour on the same footing whatever its
+    /// resolution — and an hour with no samples, app closed or monitor offline,
+    /// simply doesn't count, rather than counting as zero.
+    static func timeWeightedMean(_ points: [(date: Date, value: Double)]) -> Double? {
+        var hours: [Double: (sum: Double, count: Int)] = [:]
+        for p in points {
+            let hour = (p.date.timeIntervalSinceReferenceDate / 3600).rounded(.down)
+            hours[hour, default: (0, 0)].sum += p.value
+            hours[hour, default: (0, 0)].count += 1
+        }
+        guard !hours.isEmpty else { return nil }
+        return hours.values.reduce(0) { $0 + $1.sum / Double($1.count) } / Double(hours.count)
+    }
+
     /// A stretch of same-banded samples, positioned 0...1 along the series.
     struct Run: Equatable {
         var band: QualityBand
