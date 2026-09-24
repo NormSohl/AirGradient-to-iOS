@@ -11,6 +11,9 @@ struct HistorySection: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     let monitor: Monitor
     @Binding var metric: Metric
+    /// Remembered across launches: an iPad left on a shelf showing a week
+    /// should still show a week after it restarts.
+    @AppStorage("historyRange") private var storedRange: HistoryRange = .day
 
     private struct Point: Identifiable {
         let id = UUID()
@@ -23,22 +26,41 @@ struct HistorySection: View {
         var segment: Int = 0
     }
 
+    private var isCloud: Bool {
+        if case .cloud = monitor.source { return true }
+        return false
+    }
+
+    private var availableRanges: [HistoryRange] { HistoryRange.available(cloud: isCloud) }
+
+    /// The stored choice, unless this monitor's source can't fill it — a cloud
+    /// monitor shown after a local one left on Year falls back to its widest.
+    private var range: HistoryRange {
+        availableRanges.contains(storedRange) ? storedRange : availableRanges.last ?? .day
+    }
+
+    /// Points for the current metric recorded since `start`, plus whether any
+    /// exist at all — so an empty window can say the history is merely older,
+    /// not missing.
     @MainActor
-    private var points: [Point] {
+    private func points(since start: Date) -> (series: [Point], anyRecorded: Bool) {
         // Registers the observation dependency: `HistoryStore` itself is not
         // observable, so without reading this the chart would never redraw as
         // samples arrive.
         _ = model.historyVersion
         let settings = model.settings
+        var anyRecorded = false
         let raw = model.history.history(for: monitor.id).compactMap { reading -> Point? in
             guard let v = metric.value(from: reading, settings: settings) else { return nil }
+            anyRecorded = true
+            guard reading.timestamp >= start else { return nil }
             return Point(
                 date: reading.timestamp,
                 value: v,
                 band: metric.band(v, fahrenheit: settings.fahrenheit)
             )
         }
-        return segmented(raw)
+        return (segmented(raw), anyRecorded)
     }
 
     /// Local monitors are polled about once a minute; cloud history arrives in
@@ -74,24 +96,6 @@ struct HistorySection: View {
         }
     }
 
-    /// X-axis interval, never finer than an hour.
-    ///
-    /// Left automatic, Swift Charts picks whatever divides the span neatly —
-    /// which on a few hours of history means half-hour ticks, so the axis fills
-    /// with :30 labels that carry no information anyone wants. An hour is the
-    /// smallest unit worth labelling here, and stepping up from there keeps the
-    /// tick count roughly constant as the history grows.
-    private func axisStride(_ series: [Point]) -> (Calendar.Component, Int) {
-        guard let first = series.first, let last = series.last else { return (.hour, 1) }
-        switch last.date.timeIntervalSince(first.date) / 3600 {
-        case ..<7:   return (.hour, 1)
-        case ..<15:  return (.hour, 3)
-        case ..<30:  return (.hour, 6)
-        case ..<80:  return (.hour, 12)
-        default:     return (.day, 1)
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -107,9 +111,24 @@ struct HistorySection: View {
                 .labelsHidden()
             }
 
-            let series = points
+            // Bound to the effective range, not the stored one: a cloud monitor
+            // shows its fallback selected without overwriting the choice a
+            // local monitor will want back.
+            Picker("Range", selection: Binding(get: { range }, set: { storedRange = $0 })) {
+                ForEach(availableRanges) { r in
+                    Text(r.title).tag(r)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            let now = Date()
+            let start = now.addingTimeInterval(-range.duration)
+            let (series, anyRecorded) = points(since: start)
             if series.count < 2 {
-                Text("Recording. The monitor doesn't store history itself, so the chart fills in about a point a minute while this app is open.")
+                Text(anyRecorded
+                     ? "Nothing recorded in the last \(range.title.lowercased()). Pick a longer range to see older history."
+                     : "Recording. The monitor doesn't store history itself, so the chart fills in about a point a minute while this app is open.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
@@ -141,9 +160,17 @@ struct HistorySection: View {
                     // give the line a body, not to compete with it.
                     .foregroundStyle(bandGradient.opacity(0.22))
                 }
+                // The whole range, not just the data: each range keeps one tick
+                // layout, and history that doesn't reach back that far shows
+                // as empty space rather than being stretched to fill it.
+                .chartXScale(domain: start...now)
                 .chartXAxis {
-                    let step = axisStride(series)
-                    AxisMarks(values: .stride(by: step.0, count: step.1))
+                    let step = range.axisStride(compact: sizeClass != .regular)
+                    AxisMarks(values: .stride(by: step.component, count: step.count)) { _ in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel(format: range.labelFormat)
+                    }
                 }
                 .chartYAxis { AxisMarks(position: .leading) }
                 // The chart is the main reason to look at this on a tablet;

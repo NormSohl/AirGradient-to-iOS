@@ -152,7 +152,7 @@ make cloud and local monitors report different numbers for the same metric.
 ```
 AirGradientMonitor/
   Models/       Reading (decodes both API shapes), Metric + AQI banding, Monitor, Settings,
-                SeriesShaping (gap + band-run logic, kept testable), DemoSource
+                SeriesShaping (gap + band-run logic, kept testable), HistoryRange, DemoSource
   Networking/   AirGradientClient (actor), MonitorDiscovery (Bonjour via NWBrowser)
   Store/        MonitorsModel (@Observable state + polling loop), HistoryStore (on-disk samples)
   Views/        DashboardView (split view + tiles), MonitorDetailView, HistorySection,
@@ -214,6 +214,15 @@ docs/           manual.html (also the privacy policy), app-store-listing.md
   of the visible span.** Scaled to the span, a week-wide chart swallowed every
   excursion under ~2.6 h — which is precisely the sharp, tall spikes worth
   seeing — and painted them the colour of the calm either side.
+- **The chart's x axis spans the chosen range (Day/Week/Month/Year), not the
+  data.** Each range has one fixed tick layout in `HistoryRange`; history that
+  doesn't reach back that far shows as empty space. Ticks sized from the data
+  topped out at one per day, so once retention grew to a year a month of it
+  drew thirty cramped, clipped slots. The band gradient's stops stay relative
+  to the *data* span — Swift Charts maps a mark's gradient over the mark, not
+  the plot, which was checked on a simulator with data covering 60 of 365 days.
+  Cloud monitors are offered Day and Week only, since a week is all that is
+  fetched.
 - **History is app-recorded for local monitors, ~1 sample/minute, and ages in
   tiers.** The monitors
   keep none of their own — `/measures/current` is exactly what it says. So the

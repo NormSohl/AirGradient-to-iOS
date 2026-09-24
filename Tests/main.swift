@@ -233,6 +233,45 @@ do {
     check(SeriesShaping.bandRuns([sample(0, .good)]).count == 1, "a single sample is one run")
 }
 
+// MARK: - Chart ranges
+
+section("HistoryRange")
+do {
+    // The bug this replaced: ticks sized from the data, capped at one a day, so
+    // a month of history drew thirty unreadable slots. Every range must land
+    // on a readable tick count at both widths, wherever "now" falls.
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+    let base = cal.date(from: DateComponents(year: 2026, month: 3, day: 7, hour: 13))!
+    for range in HistoryRange.allCases {
+        for compact in [false, true] {
+            let step = range.axisStride(compact: compact)
+            var counts: [Int] = []
+            // A span of "nows", including across a DST change (Mar 8).
+            for offsetHours in stride(from: 0, to: 24 * 40, by: 7) {
+                let now = base.addingTimeInterval(TimeInterval(offsetHours) * 3600)
+                let start = now.addingTimeInterval(-range.duration)
+                var tick = cal.dateInterval(of: step.component == .weekOfYear ? .weekOfYear : step.component,
+                                            for: start)!.start
+                var n = 0
+                while tick <= now {
+                    if tick >= start { n += 1 }
+                    tick = cal.date(byAdding: step.component, value: step.count, to: tick)!
+                }
+                counts.append(n)
+            }
+            let lo = counts.min()!, hi = counts.max()!
+            check(lo >= 3 && hi <= 13, "\(range.title) \(compact ? "compact" : "regular") tick count readable",
+                  "\(lo)…\(hi) ticks")
+        }
+    }
+
+    check(HistoryRange.available(cloud: true) == [.day, .week],
+          "cloud monitors are only offered the week they have")
+    check(HistoryRange.available(cloud: false) == HistoryRange.allCases, "local monitors get every range")
+    check(HistoryRange.year.duration >= 365 * 24 * 3600, "Year reaches back as far as retention keeps")
+}
+
 // MARK: - Demo data
 
 section("DemoSource")
