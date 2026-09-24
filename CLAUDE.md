@@ -246,7 +246,9 @@ docs/           manual.html (also the privacy policy), app-store-listing.md
   The only thing persisted is `cloudBackfillDone.v1`, and only after a
   synchronous flush. Verified on a simulator against a stubbed cloud: 17
   requests on first launch (one catch-up, 13 with data, 3 empty), one on the
-  next.
+  next. Then run against a real account on an iPad (2026-09-24): the recent
+  48 h draws as one continuous line, so the cloud does send 5-minute buckets
+  there and `SeriesShaping.cloudSpacing` holds.
 - **Anything judging sample spacing must ask the source.** Local samples are a
   minute apart, cloud buckets five. `HistorySection.expectedSpacing` exists
   because the gap rule, written for local cadence, broke every cloud point into
