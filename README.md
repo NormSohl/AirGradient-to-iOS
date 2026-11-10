@@ -120,3 +120,7 @@ Home-screen widgets, Live Activities, notification thresholds, and the cloud's
 historical `measures/past` endpoint. Each is a real feature, none is needed to
 answer "what is the air like right now", and the last one needs an account to
 even test against.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
