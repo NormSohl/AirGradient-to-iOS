@@ -59,13 +59,13 @@ An iPad on a shelf makes a good permanent display, so that is what this was desi
 
 HISTORY THAT TELLS THE TRUTH
 
-The monitors keep no history of their own, so this app records it. Tap any measurement to chart it. The line is coloured by air quality along its length, so you can see when the air went bad and for how long — not just what it is now.
+The monitors keep no history of their own, so this app records it. Tap any measurement to chart it. The line is colored by air quality along its length, so you can see when the air went bad and for how long — not just what it is now.
 
-Gaps are shown as gaps. Where the app wasn't running, the line breaks rather than drawing a trend nobody measured. Local history keeps minute-by-minute detail for two days, then hourly points for a year. Cloud monitors draw on AirGradient's own continuous record instead.
+Gaps are shown as gaps. Where the app wasn't running, the line breaks rather than drawing a trend nobody measured. Local history keeps minute-by-minute detail for two days, then hourly points for a year. Cloud monitors draw on AirGradient's own continuous record, a year of it, kept on your device.
 
 TRY IT WITHOUT A MONITOR
 
-Tap "Add sample data" for a made-up monitor with two days of history. Nothing is contacted. It is the whole app, working, before you buy anything.
+Tap "Add sample data" for a made-up monitor with two days of history. Nothing is contacted. It is the whole app, working, before you buy a monitor.
 
 PRIVACY
 
@@ -92,8 +92,8 @@ Avoid repeating words already in the name or subtitle — Apple indexes those an
 
 | Field | Value |
 |---|---|
-| Support URL | `https://YOURSITE/manual.html` |
-| Privacy Policy URL | `https://YOURSITE/manual.html#privacy` |
+| Support URL | `https://www.sohl.com/apps/aetherfield/` |
+| Privacy Policy URL | `https://www.sohl.com/apps/aetherfield/privacy/` |
 | Marketing URL | optional — leave blank |
 
 ---
@@ -136,5 +136,7 @@ token is stored on device and sent only to AirGradient's API on the user's behal
 - Screenshots: iPad 13" and iPhone 6.9" are the required sizes. The sample-data
   monitor is the easiest way to produce clean ones with a full chart.
 - Age rating: 4+.
+- Price: Free.
+- App Privacy: the app now ships a PrivacyInfo.xcprivacy (UserDefaults, CA92.1; no tracking, no collected data).
 - Category: Utilities. Health & Fitness is a plausible secondary, but invites
   scrutiny about medical claims — Utilities is the quieter choice.
